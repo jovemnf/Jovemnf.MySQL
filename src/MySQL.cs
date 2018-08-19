@@ -44,6 +44,21 @@ namespace Jovemnf.MySQL
             }
         }
 
+        public MySQL(string stringConnect)
+        {
+            try
+            {
+                if (!(this.bdConn is MySqlConnection))
+                {
+                    this.bdDataSet = new DataSet();
+                    this.bdConn = new MySqlConnection(stringConnect);
+                }
+            }
+            catch (Exception ex)
+            {
+                throw ex;
+            }
+        }
 
         public MySQL()
         {
@@ -58,7 +73,7 @@ namespace Jovemnf.MySQL
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.InnerException + ex.Message);
+                throw ex;
             }
         }
         
@@ -74,7 +89,6 @@ namespace Jovemnf.MySQL
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.InnerException + ex.Message);
                 throw new MySQLCloseException("Impossível fechar conexão com o banco de dados");
             }
         }
@@ -133,8 +147,6 @@ namespace Jovemnf.MySQL
             }
             return CS10000;
         }
-
-        
 
         public void Begin()
         {
@@ -284,4 +296,3 @@ namespace Jovemnf.MySQL
 
     }
 }
-

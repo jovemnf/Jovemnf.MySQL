@@ -205,7 +205,6 @@ namespace Jovemnf.MySQL
 
     public class MySQLArrayReader
     {
-
         public Dictionary<string, object> List = new Dictionary<string, object>();
 
         public MySQLArrayReader(MySqlDataReader dr)
@@ -215,7 +214,5 @@ namespace Jovemnf.MySQL
                 List.Add(pair.Key, pair.Value);
             }
         }
-
-
     }
 }
