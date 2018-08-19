@@ -1,7 +1,7 @@
 ﻿using MySql.Data.MySqlClient;
 using System;
 using System.Collections.Generic;
-using Utils.DateTimeStamp;
+using Jovemnf.DateTimeStamp;
 
 namespace Jovemnf.MySQL
 {
