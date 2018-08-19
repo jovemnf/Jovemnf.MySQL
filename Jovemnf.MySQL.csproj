@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <PackageId>Jovemnf.MySQL</PackageId>
+    <Version>0.0.1</Version>
+    <Authors>Jovemnf</Authors>
+    <Company>Jovemnf</Company>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <Title>Pacote .net core para usar O banco de dados MySQL. </Title>
+    <RepositoryType>git</RepositoryType>
+    <RepositoryUrl>https://github.com/jovemnf/Jovemnf.MySQL.git</RepositoryUrl>
+    <DocumentationMarkdownURL>https://github.com/jovemnf/Jovemnf.MySQL/blob/master/README.md</DocumentationMarkdownURL>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MySql.Data" Version="8.0.12" />
+  </ItemGroup>
+
+</Project>
