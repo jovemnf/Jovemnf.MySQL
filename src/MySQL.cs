@@ -19,21 +19,22 @@ namespace Jovemnf.MySQL
         MySqlTransaction trans;
         bool InitTrans = false;
 
-        public static void INIT(string host, string database, string username, string password)
+        public static void INIT(string host, string database, string username, string password, string chatset = "utf8")
         {
             Data.HOST = host;
             Data.UserName = username;
             Data.PassWord = password;
             Data.Base = database;
+            Data.Charset = chatset;
         }
 
-        public MySQL(string host, string database, string username, string password)
+        public MySQL(string host, string database, string username, string password, string chatset = "utf8")
         {
             try
             {
                 if (!(this.bdConn is MySqlConnection))
                 {
-                    string uri = "server=" + host + ";database=" + database + ";Command Timeout=28800;uid=" + username + ";Max Pool Size=45;SslMode=none;pwd=" + password;
+                    string uri = "server=" + host + ";CharSet: " + chatset + ";database=" + database + ";Command Timeout=28800;uid=" + username + ";Max Pool Size=45;SslMode=none;pwd=" + password;
                     this.bdDataSet = new DataSet();
                     this.bdConn = new MySqlConnection(uri);
                 }
@@ -66,7 +67,7 @@ namespace Jovemnf.MySQL
             {
                 if (!(this.bdConn is MySqlConnection))
                 {
-                    string uri = "server=" + Data.HOST + ";database=" + Data.Base + ";Command Timeout=28800;uid=" + Data.UserName + ";Max Pool Size=45;SslMode=none;pwd=" + Data.PassWord;
+                    string uri = "server=" + Data.HOST + ";CharSet: " + Data.Charset + ";database=" + Data.Base + ";Command Timeout=28800;uid=" + Data.UserName + ";Max Pool Size=45;SslMode=none;pwd=" + Data.PassWord;
                     this.bdDataSet = new DataSet();
                     this.bdConn = new MySqlConnection(uri);
                 }
@@ -292,6 +293,7 @@ namespace Jovemnf.MySQL
             public string UserName;
             public string PassWord;
             public string Base;
+            public string Charset;
         }
 
     }
