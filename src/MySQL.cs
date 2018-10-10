@@ -12,7 +12,7 @@ namespace Jovemnf.MySQL
     {
 
         private MySqlConnection bdConn;
-        private DataSet bdDataSet;
+        //private DataSet bdDataSet;
         private MySqlCommand cmd;
         private MySqlDataAdapter da;
         private static MySQLData Data;
@@ -34,9 +34,18 @@ namespace Jovemnf.MySQL
             {
                 if (!(this.bdConn is MySqlConnection))
                 {
-                    string uri = "server=" + host + ";CharSet: " + chatset + ";database=" + database + ";Command Timeout=28800;uid=" + username + ";Max Pool Size=45;SslMode=none;pwd=" + password;
-                    this.bdDataSet = new DataSet();
-                    this.bdConn = new MySqlConnection(uri);
+
+                    MySqlConnectionStringBuilder conn_string = new MySqlConnectionStringBuilder();
+                    conn_string.Server = host;
+                    conn_string.UserID = username;
+                    conn_string.Password = password;
+                    conn_string.Database = database;
+                    conn_string.CharacterSet = "utf8";
+                    conn_string.SslMode = MySqlSslMode.None;
+
+                    //string uri = "server=" + host + ";Charset= " + chatset + ";database=" + database + ";Command Timeout=28800;uid=" + username + ";Max Pool Size=45;SslMode=none;pwd=" + password;
+                    //this.bdDataSet = new DataSet();
+                    this.bdConn = new MySqlConnection(conn_string.ToString());
                 }
             }
             catch (Exception ex)
@@ -51,7 +60,7 @@ namespace Jovemnf.MySQL
             {
                 if (!(this.bdConn is MySqlConnection))
                 {
-                    this.bdDataSet = new DataSet();
+                    //this.bdDataSet = new DataSet();
                     this.bdConn = new MySqlConnection(stringConnect);
                 }
             }
@@ -67,9 +76,18 @@ namespace Jovemnf.MySQL
             {
                 if (!(this.bdConn is MySqlConnection))
                 {
-                    string uri = "server=" + Data.HOST + ";CharSet: " + Data.Charset + ";database=" + Data.Base + ";Command Timeout=28800;uid=" + Data.UserName + ";Max Pool Size=45;SslMode=none;pwd=" + Data.PassWord;
-                    this.bdDataSet = new DataSet();
-                    this.bdConn = new MySqlConnection(uri);
+                    //string uri = "server=" + Data.HOST + ";Charset= " + Data.Charset + ";database=" + Data.Base + ";Command Timeout=28800;uid=" + Data.UserName + ";Max Pool Size=45;SslMode=none;pwd=" + Data.PassWord;
+                    //this.bdDataSet = new DataSet();
+
+                    MySqlConnectionStringBuilder conn_string = new MySqlConnectionStringBuilder();
+                    conn_string.Server = Data.HOST;
+                    conn_string.UserID = Data.UserName;
+                    conn_string.Password = Data.PassWord;
+                    conn_string.Database = Data.Base;
+                    conn_string.CharacterSet = Data.Charset;
+                    conn_string.SslMode = MySqlSslMode.None;
+
+                    this.bdConn = new MySqlConnection(conn_string.ToString());
                 }
             }
             catch (Exception ex)
