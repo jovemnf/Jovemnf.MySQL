@@ -12,6 +12,8 @@
     <RepositoryType>git</RepositoryType>
     <RepositoryUrl>https://github.com/jovemnf/Jovemnf.MySQL.git</RepositoryUrl>
     <PackageProjectUrl>https://github.com/jovemnf/Jovemnf.MySQL/blob/master/README.md</PackageProjectUrl>
+    <ReleaseVersion>0.2</ReleaseVersion>
+    <PackageVersion>0.0.9</PackageVersion>
   </PropertyGroup>
 
   <ItemGroup>

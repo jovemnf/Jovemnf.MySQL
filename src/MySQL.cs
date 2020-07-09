@@ -19,16 +19,17 @@ namespace Jovemnf.MySQL
         MySqlTransaction trans;
         bool InitTrans = false;
 
-        public static void INIT(string host, string database, string username, string password, string chatset = "utf8")
+        public static void INIT(string host, string database, string username, string password, uint port = 3306, string chatset = "utf8")
         {
             Data.HOST = host;
             Data.UserName = username;
             Data.PassWord = password;
             Data.Base = database;
             Data.Charset = chatset;
+            Data.Port = port;
         }
 
-        public MySQL(string host, string database, string username, string password, string chatset = "utf8")
+        public MySQL(string host, string database, string username, string password, uint port = 3306,  string chatset = "utf8")
         {
             try
             {
@@ -41,7 +42,9 @@ namespace Jovemnf.MySQL
                     conn_string.Password = password;
                     conn_string.Database = database;
                     conn_string.CharacterSet = "utf8";
+                    conn_string.Port = port;
                     conn_string.SslMode = MySqlSslMode.None;
+                    conn_string.MaximumPoolSize = 100;
 
                     //string uri = "server=" + host + ";Charset= " + chatset + ";database=" + database + ";Command Timeout=28800;uid=" + username + ";Max Pool Size=45;SslMode=none;pwd=" + password;
                     //this.bdDataSet = new DataSet();
@@ -86,6 +89,7 @@ namespace Jovemnf.MySQL
                     conn_string.Database = Data.Base;
                     conn_string.CharacterSet = Data.Charset;
                     conn_string.SslMode = MySqlSslMode.None;
+                    conn_string.Port = Data.Port;
 
                     this.bdConn = new MySqlConnection(conn_string.ToString());
                 }
@@ -312,6 +316,7 @@ namespace Jovemnf.MySQL
             public string PassWord;
             public string Base;
             public string Charset;
+            public uint Port;
         }
 
     }
