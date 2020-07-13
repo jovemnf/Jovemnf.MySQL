@@ -41,7 +41,7 @@ namespace Jovemnf.MySQL
                     conn_string.UserID = username;
                     conn_string.Password = password;
                     conn_string.Database = database;
-                    conn_string.CharacterSet = "utf8";
+                    conn_string.CharacterSet = chatset;
                     conn_string.Port = port;
                     conn_string.SslMode = MySqlSslMode.None;
                     conn_string.MaximumPoolSize = MaximumPoolSize;
