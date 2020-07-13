@@ -17,6 +17,12 @@ namespace Jovemnf.MySQL
         MySqlTransaction trans;
         bool InitTrans = false;
 
+        MySqlConnection Connection {
+            get {
+                return this.bdConn;
+            }
+        }
+
         static uint MaximumPoolSize { get; set; } = 100;
 
         public static void INIT(string host, string database, string username, string password, uint port = 3306, string chatset = "utf8")
@@ -105,11 +111,11 @@ namespace Jovemnf.MySQL
         {
             try
             {
-                if (this.bdConn.State == ConnectionState.Open)
-                {
+                //if (this.bdConn.State == ConnectionState.Open)
+                //{
                     this.bdConn.Close();
-                    this.bdConn = null;
-                }
+                //    this.bdConn = null;
+                //}
             }
             catch (Exception)
             {
@@ -126,10 +132,10 @@ namespace Jovemnf.MySQL
         {
             try
             {
-                if (this.bdConn.State == ConnectionState.Open)
-                {
+                //if (this.bdConn.State == ConnectionState.Open)
+                //{
                     this.bdConn.Dispose();
-                }
+                //}
             }
             catch
             {
