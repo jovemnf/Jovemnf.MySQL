@@ -2,8 +2,6 @@
 using System;
 using System.Data;
 using System.Runtime.InteropServices;
-using System.Xml;
-using Microsoft.Win32;
 
 namespace Jovemnf.MySQL
 {
@@ -18,6 +16,8 @@ namespace Jovemnf.MySQL
         private static MySQLData Data;
         MySqlTransaction trans;
         bool InitTrans = false;
+
+        static uint MaximumPoolSize { get; set; } = 100;
 
         public static void INIT(string host, string database, string username, string password, uint port = 3306, string chatset = "utf8")
         {
@@ -44,7 +44,7 @@ namespace Jovemnf.MySQL
                     conn_string.CharacterSet = "utf8";
                     conn_string.Port = port;
                     conn_string.SslMode = MySqlSslMode.None;
-                    conn_string.MaximumPoolSize = 100;
+                    conn_string.MaximumPoolSize = MaximumPoolSize;
 
                     //string uri = "server=" + host + ";Charset= " + chatset + ";database=" + database + ";Command Timeout=28800;uid=" + username + ";Max Pool Size=45;SslMode=none;pwd=" + password;
                     //this.bdDataSet = new DataSet();
@@ -90,6 +90,7 @@ namespace Jovemnf.MySQL
                     conn_string.CharacterSet = Data.Charset;
                     conn_string.SslMode = MySqlSslMode.None;
                     conn_string.Port = Data.Port;
+                    conn_string.MaximumPoolSize = MaximumPoolSize;
 
                     this.bdConn = new MySqlConnection(conn_string.ToString());
                 }
@@ -110,7 +111,7 @@ namespace Jovemnf.MySQL
                     this.bdConn = null;
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 throw new MySQLCloseException("Impossível fechar conexão com o banco de dados");
             }
