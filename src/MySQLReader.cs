@@ -2,15 +2,16 @@
 using System;
 using System.Collections.Generic;
 using Jovemnf.DateTimeStamp;
+using System.Data.Common;
 
 namespace Jovemnf.MySQL
 {
 
     public class MySQLReader : IDisposable
     {
-        private MySqlDataReader dr;
+        private DbDataReader dr;
 
-        public MySQLReader(MySqlDataReader _dr)
+        public MySQLReader(DbDataReader _dr)
         {
             this.dr = _dr;
         }
@@ -207,7 +208,7 @@ namespace Jovemnf.MySQL
     {
         public Dictionary<string, object> List = new Dictionary<string, object>();
 
-        public MySQLArrayReader(MySqlDataReader dr)
+        public MySQLArrayReader(DbDataReader dr)
         {
             foreach (KeyValuePair<string, object> pair in dr)
             {

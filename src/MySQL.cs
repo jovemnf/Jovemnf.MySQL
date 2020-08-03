@@ -2,6 +2,7 @@
 using System;
 using System.Data;
 using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 
 namespace Jovemnf.MySQL
 {
@@ -11,7 +12,7 @@ namespace Jovemnf.MySQL
 
         private MySqlConnection bdConn;
         //private DataSet bdDataSet;
-        private MySqlCommand cmd;
+        private MySqlCommand cmd = null;
         private MySqlDataAdapter da;
         private static MySQLData Data;
         MySqlTransaction trans;
@@ -23,7 +24,14 @@ namespace Jovemnf.MySQL
             }
         }
 
+        MySqlCommand Command {
+            get {
+                return this.cmd;
+            }
+        }
+
         static uint MaximumPoolSize { get; set; } = 100;
+        static bool Pooling { get; set; } = false;
 
         public static void INIT(string host, string database, string username, string password, uint port = 3306, string chatset = "utf8")
         {
@@ -51,6 +59,7 @@ namespace Jovemnf.MySQL
                     conn_string.Port = port;
                     conn_string.SslMode = MySqlSslMode.None;
                     conn_string.MaximumPoolSize = MaximumPoolSize;
+                    conn_string.Pooling = Pooling;
 
                     //string uri = "server=" + host + ";Charset= " + chatset + ";database=" + database + ";Command Timeout=28800;uid=" + username + ";Max Pool Size=45;SslMode=none;pwd=" + password;
                     //this.bdDataSet = new DataSet();
@@ -97,6 +106,7 @@ namespace Jovemnf.MySQL
                     conn_string.SslMode = MySqlSslMode.None;
                     conn_string.Port = Data.Port;
                     conn_string.MaximumPoolSize = MaximumPoolSize;
+                    conn_string.Pooling = Pooling;
 
                     this.bdConn = new MySqlConnection(conn_string.ToString());
                 }
@@ -132,14 +142,14 @@ namespace Jovemnf.MySQL
         {
             try
             {
-                //if (this.bdConn.State == ConnectionState.Open)
-                //{
-                    this.bdConn.Dispose();
-                //}
+                if (this.cmd != null) {
+                    this.cmd.Dispose();
+                }
+                this.bdConn.Dispose();
             }
-            catch
+            catch (Exception e)
             {
-                //throw new MySQLCloseException("Impossível fechar conexão com o banco de dados");
+                throw e;
             }
         }
 
@@ -148,6 +158,23 @@ namespace Jovemnf.MySQL
             try
             {
                 this.cmd.ExecuteNonQuery();
+            }
+            catch (MySqlException ex)
+            {
+                throw ex;
+            }
+            catch (Exception ex)
+            {
+                throw ex;
+            }
+            return this.LastId();
+        }
+
+        public async Task<int> ExecuteInsertAsync()
+        {
+            try
+            {
+                await this.cmd.ExecuteNonQueryAsync();
             }
             catch (MySqlException ex)
             {
@@ -176,6 +203,22 @@ namespace Jovemnf.MySQL
                 throw ex;
             }
             return CS10000;
+        }
+
+        public async Task<MySQLReader> ExecuteQueryAsync()
+        {
+            try
+            {
+                return new MySQLReader(await this.cmd.ExecuteReaderAsync());
+            }
+            catch (MySqlException ex)
+            {
+                throw ex;
+            }
+            catch (Exception ex)
+            {
+                throw ex;
+            }
         }
 
         public void Begin()
@@ -243,6 +286,22 @@ namespace Jovemnf.MySQL
             }
         }
 
+        public async Task<int> ExecuteUpdateAsync()
+        {
+            try
+            {
+                return await this.cmd.ExecuteNonQueryAsync();
+            }
+            catch (MySqlException ex)
+            {
+                throw ex;
+            }
+            catch (Exception ex)
+            {
+                throw ex;
+            }
+        }
+
         private int LastId()
         {
             string str;
@@ -269,6 +328,22 @@ namespace Jovemnf.MySQL
                 if (this.bdConn.State != ConnectionState.Open)
                 {
                     this.bdConn.Open();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.InnerException + ex.Message);
+                throw new MySQLConnectException("Impossível estabelecer conexão com o banco de dados");
+            }
+        }
+
+        public async Task openAsync()
+        {
+            try
+            {
+                if (this.bdConn.State != ConnectionState.Open)
+                {
+                    await this.bdConn.OpenAsync();
                 }
             }
             catch (Exception ex)
