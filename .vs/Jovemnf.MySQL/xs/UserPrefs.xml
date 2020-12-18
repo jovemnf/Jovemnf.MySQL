@@ -1,13 +1,13 @@
 ﻿<Properties>
   <MonoDevelop.Ide.Workbench ActiveDocument="src/MySQL.cs">
     <Files>
-      <File FileName="src/MySQL.cs" Line="7" Column="1" />
+      <File FileName="src/MySQL.cs" Line="324" Column="22" />
     </Files>
     <Pads>
       <Pad Id="ProjectPad">
         <State name="__root__">
           <Node name="Jovemnf.MySQL" expanded="True">
-            <Node name="Jovemnf.MySQL" expanded="True" selected="True">
+            <Node name="Jovemnf.MySQL" expanded="True">
               <Node name="src" expanded="True" />
             </Node>
           </Node>
