@@ -1,10 +1,11 @@
-﻿using MySqlConnector;
+﻿/*
+using MySql.Data.MySqlClient;
 using System;
 using System.Data;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 
-namespace Jovemnf.MySQL
+namespace Jovemnf.MySQL2
 {
 
     public class MySQL : IDisposable
@@ -110,24 +111,16 @@ namespace Jovemnf.MySQL
                 throw;
             }
         }
-
-        public void CloseSync()
+        
+        public void Close()
         {
             try
             {
-                bdConn.Close();
-            }
-            catch
-            {
-                throw;
-            }
-        }
-
-        public void CloseAsync()
-        {
-            try
-            {
-                bdConn.CloseAsync();
+                //if (this.bdConn.State == ConnectionState.Open)
+                //{
+                    this.bdConn.Close();
+                //    this.bdConn = null;
+                //}
             }
             catch
             {
@@ -155,23 +148,6 @@ namespace Jovemnf.MySQL
             }
         }
 
-        public async Task DisposeAsync()
-        {
-            try
-            {
-                if (this.cmd != null)
-                {
-                    await this.cmd.DisposeAsync();
-                }
-                await this.bdConn.DisposeAsync();
-            }
-            catch
-            {
-                throw;
-            }
-        }
-
-        /*
         public int ExecuteInsert(bool lastID = true)
         {
             try
@@ -188,16 +164,15 @@ namespace Jovemnf.MySQL
                 throw;
             }
         }
-        */
 
         public async Task<int> ExecuteInsertAsync(bool lastID = true)
         {
             try
             {
-                await cmd.ExecuteNonQueryAsync();
+                await this.cmd.ExecuteNonQueryAsync();
                 if (lastID)
                 {
-                    return await LastIdAsync();
+                    return this.LastId();
                 }
                 return 0;
             }
@@ -207,24 +182,7 @@ namespace Jovemnf.MySQL
             }
         }
 
-        public int ExecuteInsertSync(bool lastID = true)
-        {
-            try
-            {
-                cmd.ExecuteNonQuery();
-                if (lastID)
-                {
-                    return LastIdSync();
-                }
-                return 0;
-            }
-            catch
-            {
-                throw;
-            }
-        }
-
-        public MySQLReader ExecuteQuerySync()
+        public MySQLReader ExecuteQuery()
         {
             try
             {
@@ -248,7 +206,7 @@ namespace Jovemnf.MySQL
             }
         }
 
-        public void BeginSync()
+        public void Begin()
         {
             try
             {
@@ -261,20 +219,7 @@ namespace Jovemnf.MySQL
             }
         }
 
-        public async Task BeginAsync()
-        {
-            try
-            {
-                InitTrans = true;
-                trans = await bdConn.BeginTransactionAsync();
-            }
-            catch
-            {
-                throw;
-            }
-        }
-
-        public void RoolBackSync()
+        public void RoolBack()
         {
             try
             {
@@ -286,19 +231,7 @@ namespace Jovemnf.MySQL
             }
         }
 
-        public async Task RollbackAsync()
-        {
-            try
-            {
-                await trans.RollbackAsync();
-            }
-            catch
-            {
-                throw;
-            }
-        }
-
-        public void CommitSync()
+        public void Commit()
         {
             try
             {
@@ -310,19 +243,7 @@ namespace Jovemnf.MySQL
             }
         }
 
-        public async Task CommitAsync()
-        {
-            try
-            {
-                await trans.CommitAsync();
-            }
-            catch
-            {
-                throw;
-            }
-        }
-
-        public int ExecuteUpdateSync()
+        public int ExecuteUpdate()
         {
             try
             {
@@ -346,7 +267,6 @@ namespace Jovemnf.MySQL
             }
         }
 
-        /*
         private int LastId()
         {
             string str;
@@ -361,39 +281,7 @@ namespace Jovemnf.MySQL
             }
             return Convert.ToInt32(str);
         }
-        */
 
-        private async Task<int> LastIdAsync()
-        {
-            string str;
-            try
-            {
-                this.cmd.CommandText = "SELECT LAST_INSERT_ID()";
-                str = (await this.cmd.ExecuteScalarAsync()).ToString();
-            }
-            catch
-            {
-                throw;
-            }
-            return Convert.ToInt32(str);
-        }
-
-        private int LastIdSync()
-        {
-            string str;
-            try
-            {
-                this.cmd.CommandText = "SELECT LAST_INSERT_ID()";
-                str = ( this.cmd.ExecuteScalar()).ToString();
-            }
-            catch
-            {
-                throw;
-            }
-            return Convert.ToInt32(str);
-        }
-
-        [Obsolete("Method1 is deprecated, please use OpenAsync instead.")]
         public void Open()
         {
             try
@@ -402,6 +290,19 @@ namespace Jovemnf.MySQL
                 {
                     this.bdConn.Open();
                 }
+            }
+            catch
+            {
+                throw;
+            }
+        }
+
+        [Obsolete("open is deprecated, please use Open instead.")]
+        public void open()
+        {
+            try
+            {
+                this.Open();
             }
             catch
             {
@@ -440,13 +341,11 @@ namespace Jovemnf.MySQL
             }
         }
 
-        /*
         [Obsolete("setParameter is deprecated, please use SetParameter instead.")]
         public void setParameter(string param, object value)
         {
             this.cmd.Parameters.AddWithValue(param, value);
         }
-        */
 
         public void SetParameter(string param, object value)
         {
@@ -482,3 +381,4 @@ namespace Jovemnf.MySQL
 
     }
 }
+*/

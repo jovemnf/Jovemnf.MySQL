@@ -1,8 +1,10 @@
-﻿using MySql.Data.MySqlClient;
+﻿//using MySql.Data.MySqlClient;
+using MySqlConnector;
 using System;
 using System.Collections.Generic;
 using Jovemnf.DateTimeStamp;
 using System.Data.Common;
+using System.Threading.Tasks;
 
 namespace Jovemnf.MySQL
 {
@@ -59,7 +61,7 @@ namespace Jovemnf.MySQL
             }
             catch
             {
-                throw new Exception("Impossível Fazer um Get Bool");
+                throw;
             }
         }
 
@@ -71,7 +73,7 @@ namespace Jovemnf.MySQL
             }
             catch
             {
-                throw new Exception("Impossível Fazer um Get DateTime");
+                throw;
             }
         }
 
@@ -129,7 +131,7 @@ namespace Jovemnf.MySQL
             {
                 return new MySQLArrayReader(dr);
             }
-            catch (Exception)
+            catch
             {
                 return null;
             }
@@ -141,7 +143,7 @@ namespace Jovemnf.MySQL
             {
                 return TryParse.ToInt32(this.dr[column]);
             }
-            catch (Exception)
+            catch
             {
                 return _default;
             }
@@ -153,7 +155,7 @@ namespace Jovemnf.MySQL
             {
                 return TryParse.ToLong(this.dr[column]);
             }
-            catch (Exception)
+            catch
             {
                 return 0;
             }
@@ -196,6 +198,18 @@ namespace Jovemnf.MySQL
             try
             {
                 return this.dr.Read();
+            }
+            catch
+            {
+                throw new Exception("Impossível Fazer um Read");
+            }
+        }
+
+        public Task<bool> ReadAsync()
+        {
+            try
+            {
+                return this.dr.ReadAsync();
             }
             catch
             {
