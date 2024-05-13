@@ -207,6 +207,23 @@ namespace Jovemnf.MySQL
             }
         }
 
+        public async Task<long> ExecuteInsertAsyncLong(bool lastID = true)
+        {
+            try
+            {
+                await cmd.ExecuteNonQueryAsync();
+                if (lastID)
+                {
+                    return await LastIdAsyncLong();
+                }
+                return 0;
+            }
+            catch
+            {
+                throw;
+            }
+        }
+
         public int ExecuteInsertSync(bool lastID = true)
         {
             try
@@ -378,6 +395,21 @@ namespace Jovemnf.MySQL
             return Convert.ToInt32(str);
         }
 
+        private async Task<long> LastIdAsyncLong()
+        {
+            string str;
+            try
+            {
+                this.cmd.CommandText = "SELECT LAST_INSERT_ID()";
+                str = (await this.cmd.ExecuteScalarAsync()).ToString();
+            }
+            catch
+            {
+                throw;
+            }
+            return Convert.ToInt64(str);
+        }
+
         private int LastIdSync()
         {
             string str;
@@ -393,8 +425,7 @@ namespace Jovemnf.MySQL
             return Convert.ToInt32(str);
         }
 
-        [Obsolete("Method1 is deprecated, please use OpenAsync instead.")]
-        public void Open()
+        public void OpenSync()
         {
             try
             {

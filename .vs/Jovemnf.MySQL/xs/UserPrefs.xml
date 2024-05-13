@@ -3,7 +3,11 @@
     <BreakpointStore />
   </MonoDevelop.Ide.DebuggingService.Breakpoints>
   <MonoDevelop.Ide.DebuggingService.PinnedWatches />
-  <MonoDevelop.Ide.Workbench>
+  <MonoDevelop.Ide.Workbench ActiveDocument="Jovemnf.MySQL.csproj">
+    <Files>
+      <File FileName="src/MySQL.cs" Line="395" Column="1" />
+      <File FileName="Jovemnf.MySQL.csproj" Line="16" Column="27" />
+    </Files>
     <Pads>
       <Pad Id="ProjectPad">
         <State name="__root__">

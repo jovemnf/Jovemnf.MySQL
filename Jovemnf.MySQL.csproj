@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>net7.0</TargetFramework>
     <PackageId>Jovemnf.MySQL</PackageId>
-    <Version>0.0.26</Version>
+    <Version>0.0.28</Version>
     <Authors>Jovemnf</Authors>
     <Company>Jovemnf</Company>
     <IsPackable>true</IsPackable>
@@ -12,8 +12,8 @@
     <RepositoryType>git</RepositoryType>
     <RepositoryUrl>https://github.com/jovemnf/Jovemnf.MySQL.git</RepositoryUrl>
     <PackageProjectUrl>https://github.com/jovemnf/Jovemnf.MySQL/blob/master/README.md</PackageProjectUrl>
-    <ReleaseVersion>0.0.26</ReleaseVersion>
-    <PackageVersion>0.0.26</PackageVersion>
+    <ReleaseVersion>0.0.28</ReleaseVersion>
+    <PackageVersion>0.0.28</PackageVersion>
   </PropertyGroup>
 
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
