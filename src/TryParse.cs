@@ -1,4 +1,4 @@
-﻿namespace Jovemnf.MySQL
+namespace Jovemnf.MySQL
 {
     using System;
 
@@ -57,7 +57,7 @@
         {
             try
             {
-                return int.Parse(value.ToString());
+                return Convert.ToInt32(value);
             }
             catch (Exception)
             {
