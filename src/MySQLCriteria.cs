@@ -1,8 +1,7 @@
-﻿namespace Jovemnf.MySQL
+namespace Jovemnf.MySQL
 {
     using System;
     using System.Collections.Generic;
-    using System.Runtime.InteropServices;
 
     public class MySQLCriteria
     {
@@ -12,7 +11,7 @@
         {
             if (alias != null)
             {
-                value = value = value + " as " + alias;
+                value = $"{value} as {alias}";
             }
             this.list.Add(value);
         }
@@ -21,7 +20,7 @@
         {
             get
             {
-                return string.Join(",", this.list.ToArray());
+                return string.Join(",", this.list);
             }
         }
     }

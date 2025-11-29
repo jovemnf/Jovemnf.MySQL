@@ -1,4 +1,4 @@
-﻿//using MySql.Data.MySqlClient;
+//using MySql.Data.MySqlClient;
 using MySqlConnector;
 using System;
 using System.Collections.Generic;
@@ -47,7 +47,7 @@ namespace Jovemnf.MySQL
             bool aux = false;
             try
             {
-                aux = Convert.ToBoolean( this.dr[column].ToString() );
+                aux = TryParse.ToBoolean(this.dr[column]);
             }
             catch { }
             return aux;
@@ -163,20 +163,19 @@ namespace Jovemnf.MySQL
 
         public string GetString(string column, string vdefault = null)
         {
-            string CS10000;
             try
             {
-                CS10000 = this.dr[column].ToString();
-                if (CS10000 == null)
+                int ordinal = this.dr.GetOrdinal(column);
+                if (this.dr.IsDBNull(ordinal))
                 {
-                    CS10000 = vdefault;
+                    return vdefault;
                 }
+                return this.dr.GetString(ordinal);
             }
             catch
             {
                 throw new Exception("Impossível Fazer um Get String");
             }
-            return CS10000;
         }
 
         public byte[] GetByteArray(string column)
@@ -224,9 +223,14 @@ namespace Jovemnf.MySQL
 
         public MySQLArrayReader(DbDataReader dr)
         {
-            foreach (KeyValuePair<string, object> pair in dr)
+            if (dr != null && dr.HasRows)
             {
-                List.Add(pair.Key, pair.Value);
+                for (int i = 0; i < dr.FieldCount; i++)
+                {
+                    string columnName = dr.GetName(i);
+                    object value = dr.IsDBNull(i) ? null : dr.GetValue(i);
+                    List[columnName] = value;
+                }
             }
         }
     }

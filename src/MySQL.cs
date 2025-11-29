@@ -14,7 +14,7 @@ namespace Jovemnf.MySQL
         //private DataSet bdDataSet;
         private MySqlCommand cmd = null;
         private MySqlDataAdapter da;
-        private static MySQLData Data;
+        private static MySQLData Data = default;
         MySqlTransaction trans;
         bool InitTrans = false;
 
@@ -93,7 +93,7 @@ namespace Jovemnf.MySQL
         {
             try
             {
-                if (!(bdConn is not null))
+                if (bdConn is null)
                 {
 
                     MySqlConnectionStringBuilder conn_string = new()
@@ -134,7 +134,7 @@ namespace Jovemnf.MySQL
         {
             try
             {
-                if (bdConn is not not null)
+                if (bdConn is null)
                 {
                     //this.bdDataSet = new DataSet();
                     this.bdConn = new MySqlConnection(stringConnect);
@@ -150,7 +150,7 @@ namespace Jovemnf.MySQL
         {
             try
             {
-                if (bdConn is not not null)
+                if (bdConn is null)
                 {
                     //string uri = "server=" + Data.HOST + ";port:" + Data.Port + ";database=" + Data.Base + ";user id=" + Data.UserName + ";Max Pool Size=100;SslMode=none;pwd=" + Data.PassWord;
                     //this.bdDataSet = new DataSet();
@@ -477,47 +477,44 @@ namespace Jovemnf.MySQL
 
         private async Task<int> LastIdAsync()
         {
-            string str;
             try
             {
                 this.cmd.CommandText = "SELECT LAST_INSERT_ID()";
-                str = (await this.cmd.ExecuteScalarAsync()).ToString();
+                object result = await this.cmd.ExecuteScalarAsync();
+                return result != null ? Convert.ToInt32(result) : 0;
             }
             catch
             {
                 throw;
             }
-            return Convert.ToInt32(str);
         }
 
         private async Task<long> LastIdAsyncLong()
         {
-            string str;
             try
             {
                 this.cmd.CommandText = "SELECT LAST_INSERT_ID()";
-                str = (await this.cmd.ExecuteScalarAsync()).ToString();
+                object result = await this.cmd.ExecuteScalarAsync();
+                return result != null ? Convert.ToInt64(result) : 0;
             }
             catch
             {
                 throw;
             }
-            return Convert.ToInt64(str);
         }
 
         private int LastIdSync()
         {
-            string str;
             try
             {
                 this.cmd.CommandText = "SELECT LAST_INSERT_ID()";
-                str = ( this.cmd.ExecuteScalar()).ToString();
+                object result = this.cmd.ExecuteScalar();
+                return result != null ? Convert.ToInt32(result) : 0;
             }
             catch
             {
                 throw;
             }
-            return Convert.ToInt32(str);
         }
 
         public void OpenSync()
