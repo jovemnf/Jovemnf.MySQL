@@ -1,4 +1,4 @@
-﻿using MySqlConnector;
+using MySqlConnector;
 using System;
 using System.Data;
 using System.Runtime.InteropServices;
@@ -18,8 +18,66 @@ namespace Jovemnf.MySQL
         MySqlTransaction trans;
         bool InitTrans = false;
 
+        // Configurações de Pool de Conexão - Otimizações para melhor desempenho
+        /// <summary>
+        /// Número máximo de conexões no pool. Aumente para aplicações com alta concorrência.
+        /// </summary>
         public static uint MaximumPoolSize { get; set; } = 100;
+        
+        /// <summary>
+        /// Número mínimo de conexões mantidas no pool. Conexões pré-estabelecidas reduzem latência.
+        /// Recomendado: 5-10 para aplicações com tráfego constante.
+        /// </summary>
+        public static uint MinimumPoolSize { get; set; } = 0;
+        
+        /// <summary>
+        /// Habilita/desabilita o pooling de conexões. Deve estar sempre true para melhor desempenho.
+        /// </summary>
         public static bool Pooling { get; set; } = true;
+        
+        /// <summary>
+        /// Timeout em segundos para obter uma conexão do pool antes de lançar exceção.
+        /// </summary>
+        public static uint ConnectionTimeout { get; set; } = 15;
+        
+        /// <summary>
+        /// Tempo em segundos que uma conexão pode ficar idle antes de ser removida do pool.
+        /// Reduz o uso de recursos mantendo apenas conexões ativas.
+        /// </summary>
+        public static uint ConnectionIdleTimeout { get; set; } = 180; // 3 minutos
+        
+        /// <summary>
+        /// Tempo máximo de vida de uma conexão em segundos. 0 = sem limite.
+        /// Útil para forçar renovação periódica de conexões antigas.
+        /// </summary>
+        public static uint ConnectionLifeTime { get; set; } = 0;
+        
+        /// <summary>
+        /// Se true, reseta o estado da conexão ao retornar ao pool. 
+        /// Pode reduzir performance, mas garante estado limpo.
+        /// </summary>
+        public static bool ConnectionReset { get; set; } = false;
+        
+        /// <summary>
+        /// Habilita keepalive TCP para detectar conexões mortas mais rapidamente.
+        /// </summary>
+        public static bool Keepalive { get; set; } = true;
+        
+        /// <summary>
+        /// Intervalo em segundos entre pacotes keepalive.
+        /// </summary>
+        public static uint KeepaliveInterval { get; set; } = 30;
+        
+        /// <summary>
+        /// Permite uso de variáveis de usuário (@variavel) em queries. Melhora performance.
+        /// </summary>
+        public static bool AllowUserVariables { get; set; } = true;
+        
+        /// <summary>
+        /// Habilita compressão de dados. Use apenas se latência de rede for alta (>50ms).
+        /// Pode reduzir throughput em redes rápidas.
+        /// </summary>
+        public static bool UseCompression { get; set; } = false;
 
         public static void INIT(string host, string database, string username, string password, uint port = 3306, string chatset = "utf8")
         {
@@ -48,7 +106,16 @@ namespace Jovemnf.MySQL
                         CharacterSet = chatset,
                         SslMode = MySqlSslMode.None,
                         MaximumPoolSize = MaximumPoolSize,
-                        Pooling = Pooling
+                        MinimumPoolSize = MinimumPoolSize,
+                        Pooling = Pooling,
+                        ConnectionTimeout = ConnectionTimeout,
+                        ConnectionIdleTimeout = ConnectionIdleTimeout,
+                        ConnectionLifeTime = ConnectionLifeTime,
+                        ConnectionReset = ConnectionReset,
+                        Keepalive = Keepalive,
+                        KeepaliveInterval = KeepaliveInterval,
+                        AllowUserVariables = AllowUserVariables,
+                        UseCompression = UseCompression
                     };
 
                     //string uri = "server=" + host + ";port:" + port + ";database=" + database + ";user id=" + username + ";Max Pool Size=100;SslMode=none;pwd=" + password;
@@ -115,7 +182,10 @@ namespace Jovemnf.MySQL
         {
             try
             {
-                bdConn.Close();
+                if (bdConn != null && bdConn.State == ConnectionState.Open)
+                {
+                    bdConn.Close(); // Retorna a conexão ao pool
+                }
             }
             catch
             {
@@ -123,11 +193,14 @@ namespace Jovemnf.MySQL
             }
         }
 
-        public void CloseAsync()
+        public async Task CloseAsync()
         {
             try
             {
-                bdConn.CloseAsync();
+                if (bdConn != null && bdConn.State == ConnectionState.Open)
+                {
+                    await bdConn.CloseAsync(); // Retorna a conexão ao pool
+                }
             }
             catch
             {
@@ -146,8 +219,19 @@ namespace Jovemnf.MySQL
             {
                 if (this.cmd != null) {
                     this.cmd.Dispose();
+                    this.cmd = null;
                 }
-                this.bdConn.Dispose();
+                
+                // Garante que a conexão seja fechada antes de retornar ao pool
+                if (this.bdConn != null)
+                {
+                    if (this.bdConn.State == ConnectionState.Open)
+                    {
+                        this.bdConn.Close();
+                    }
+                    this.bdConn.Dispose();
+                    this.bdConn = null;
+                }
             }
             catch
             {
@@ -162,8 +246,19 @@ namespace Jovemnf.MySQL
                 if (this.cmd != null)
                 {
                     await this.cmd.DisposeAsync();
+                    this.cmd = null;
                 }
-                await this.bdConn.DisposeAsync();
+                
+                // Garante que a conexão seja fechada antes de retornar ao pool
+                if (this.bdConn != null)
+                {
+                    if (this.bdConn.State == ConnectionState.Open)
+                    {
+                        await this.bdConn.CloseAsync();
+                    }
+                    await this.bdConn.DisposeAsync();
+                    this.bdConn = null;
+                }
             }
             catch
             {
