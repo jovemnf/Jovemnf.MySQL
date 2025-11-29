@@ -17,7 +17,9 @@ namespace Jovemnf.MySQL.Tests
         private readonly string _testUsername;
         private readonly string _testPassword;
         private readonly uint _testPort;
-        private MySQL? _mysql;
+#nullable disable
+        private MySQL _mysql;
+#nullable enable
 
         public MySQLIntegrationTests()
         {
@@ -32,7 +34,10 @@ namespace Jovemnf.MySQL.Tests
 
         public void Dispose()
         {
-            _mysql?.Dispose();
+            if (_mysql != null)
+            {
+                _mysql.Dispose();
+            }
         }
 
         [Fact(Skip = "Requer banco de dados MySQL configurado")]
