@@ -63,6 +63,9 @@ using (var mysql = new MySQL(config))
 O `UpdateQueryBuilder` permite construir queries de atualização complexas de forma legível e segura.
 
 ```csharp
+using Jovemnf.MySQL;
+using Jovemnf.MySQL.Builder;
+
 var builder = new UpdateQueryBuilder()
     .Table("usuarios")
     .Set("status", "ativo")
@@ -131,6 +134,9 @@ using (var mysql = new MySQL(config))
 O `MySQLReader` permite mapear os resultados diretamente para classes C# (POCOs) usando reflexão. O mapeador é inteligente: ele ignora maiúsculas/minúsculas e também remove underscores ao comparar nomes de colunas com propriedades (ex: mapeia automaticamente a coluna `tipo_pessoa` para a propriedade `TipoPessoa`).
 
 ```csharp
+using Jovemnf.MySQL;
+using Jovemnf.MySQL.Builder;
+
 public class Usuario
 {
     public int Id { get; set; }
@@ -177,6 +183,28 @@ else
     Console.WriteLine($"Erro: {result.Error}");
 }
 ```
+
+### Testes
+
+O projeto inclui uma suíte de testes robustos focada em funcionalidade e segurança (SQL Injection).
+
+Para rodar os testes:
+1. Abra o projeto no **JetBrains Rider** ou **Visual Studio**.
+2. Navegue até o arquivo `src/TestRunner.cs`.
+3. Clique com o botão direito no método `Main` e selecione **Run**.
+
+Os testes validarão:
+- **Segurança:** Proteção contra SQL Injection em Tabelas, Colunas e Valores.
+- **Builders:** Geração correta de queries complexas (Joins, WhereIn, Between).
+- **Mapeamento:** Lógica de conversão de dados e nomes de colunas.
+
+### Troubleshooting (Resolução de Problemas)
+
+**Erro: `NETSDK1004: Arquivo de ativos project.assets.json não encontrado`**
+Se você limpar o projeto ou clonar o repositório e ver este erro:
+1. Clique com o botão direito na **Solution** no Rider.
+2. Selecione **Restore NuGet Packages**.
+3. Aguarde o término e tente compilar novamente.
 
 ## 🔒 Segurança
 

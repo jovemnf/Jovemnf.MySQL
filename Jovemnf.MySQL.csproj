@@ -1,8 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
+<!-- Force Restore Trigger -->
 
   <PropertyGroup>
-    <TargetFramework>net7.0</TargetFramework>
+    <TargetFramework>net9.0</TargetFramework>
     <PackageId>Jovemnf.MySQL</PackageId>
+    <DefaultItemExcludes>$(DefaultItemExcludes);MysqlTest/**</DefaultItemExcludes>
     <Version>0.0.28</Version>
     <Authors>Jovemnf</Authors>
     <Company>Jovemnf</Company>
@@ -13,7 +15,7 @@
     <RepositoryUrl>https://github.com/jovemnf/Jovemnf.MySQL.git</RepositoryUrl>
     <PackageProjectUrl>https://github.com/jovemnf/Jovemnf.MySQL/blob/master/README.md</PackageProjectUrl>
     <ReleaseVersion>0.0.28</ReleaseVersion>
-    <PackageVersion>0.0.30</PackageVersion>
+    <PackageVersion>0.0.31</PackageVersion>
   </PropertyGroup>
 
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
@@ -25,6 +27,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="JetBrains.Annotations" Version="2025.2.4" />
     <PackageReference Include="Jovemnf.DateTimeStamp" Version="0.0.5" />
     <!--<PackageReference Include="MySql.Data" Version="8.0.12" />-->
     <PackageReference Include="MySqlConnector" Version="2.5.0" />
@@ -32,5 +35,8 @@
 
   <ItemGroup>
     <None Remove="MySql.Data" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="MysqlTest" />
   </ItemGroup>
 </Project>

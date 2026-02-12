@@ -1,6 +1,7 @@
 namespace Jovemnf.MySQL
 {
     using System;
+    using System.Globalization;
 
     internal class TryParse
     {
@@ -21,7 +22,7 @@ namespace Jovemnf.MySQL
         {
             try
             {
-                return Convert.ToDecimal(value);
+                return Convert.ToDecimal(value, CultureInfo.InvariantCulture);
             }
             catch
             {
@@ -33,7 +34,7 @@ namespace Jovemnf.MySQL
         {
             try
             {
-                return Convert.ToDouble(value);
+                return Convert.ToDouble(value, CultureInfo.InvariantCulture);
             }
             catch
             {
@@ -45,7 +46,7 @@ namespace Jovemnf.MySQL
         {
             try
             {
-                return Convert.ToInt64(value);
+                return Convert.ToInt64(value, CultureInfo.InvariantCulture);
             }
             catch
             {
@@ -57,7 +58,7 @@ namespace Jovemnf.MySQL
         {
             try
             {
-                return Convert.ToInt32(value);
+                return Convert.ToInt32(value, CultureInfo.InvariantCulture);
             }
             catch (Exception)
             {

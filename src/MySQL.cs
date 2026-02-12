@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
+using Jovemnf.MySQL.Builder;
 
 namespace Jovemnf.MySQL
 {

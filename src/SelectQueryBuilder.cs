@@ -4,7 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using MySqlConnector;
 
-namespace Jovemnf.MySQL;
+namespace Jovemnf.MySQL.Builder;
 
 public class SelectQueryBuilder
 {
@@ -82,15 +82,15 @@ public class SelectQueryBuilder
         return this;
     }
 
-    public SelectQueryBuilder WhereIn(string field, IEnumerable<object> values)
+    public SelectQueryBuilder WhereIn<T>(string field, IEnumerable<T> values)
     {
-        _whereConditions.Add(new WhereCondition { Field = field, Values = values.ToList(), Operator = "IN", Logic = "AND" });
+        _whereConditions.Add(new WhereCondition { Field = field, Values = values.Cast<object>().ToList(), Operator = "IN", Logic = "AND" });
         return this;
     }
 
-    public SelectQueryBuilder WhereNotIn(string field, IEnumerable<object> values)
+    public SelectQueryBuilder WhereNotIn<T>(string field, IEnumerable<T> values)
     {
-        _whereConditions.Add(new WhereCondition { Field = field, Values = values.ToList(), Operator = "NOT IN", Logic = "AND" });
+        _whereConditions.Add(new WhereCondition { Field = field, Values = values.Cast<object>().ToList(), Operator = "NOT IN", Logic = "AND" });
         return this;
     }
 
