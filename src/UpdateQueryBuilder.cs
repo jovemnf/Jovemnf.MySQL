@@ -17,7 +17,7 @@ namespace Jovemnf.MySQL.Builder
         
         private static readonly HashSet<string> _allowedOperators = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            "=", "<>", "!=", "<", "<=", ">", ">=", "LIKE", "NOT LIKE", "IN", "NOT IN", "IS NULL", "IS NOT NULL", "BETWEEN"
+            "=", "<>", "!=", "<", "<=", ">", ">=", "LIKE", "NOT LIKE", "IN", "NOT IN", "IS NULL", "IS NOT NULL", "BETWEEN", "REGEXP", "NOT REGEXP"
         };
 // ... (skip unchanged lines) ...
         public UpdateQueryBuilder Table(string tableName)
@@ -77,6 +77,11 @@ namespace Jovemnf.MySQL.Builder
                 Logic = "AND"
             });
             return this;
+        }
+
+        public UpdateQueryBuilder Where(string field, object value, QueryOperator op)
+        {
+            return Where(field, value, op.ToSqlString());
         }
 
         public UpdateQueryBuilder WhereIn<T>(string field, IEnumerable<T> values)
@@ -385,6 +390,26 @@ namespace Jovemnf.MySQL
             
             var executor = new UpdateQueryExecutor(connection);
             return await executor.ExecuteAsync(builder);
+        }
+
+        public async Task<int> ExecuteDeleteAsync(DeleteQueryBuilder builder)
+        {
+            using var connection = new MySqlConnection(_connectionString);
+            await connection.OpenAsync();
+            
+            var executor = new DeleteQueryExecutor(connection);
+            return await executor.ExecuteAsync(builder);
+        }
+
+        public int ExecuteDeleteSync(DeleteQueryBuilder builder)
+        {
+            using var connection = new MySqlConnection(_connectionString);
+            connection.Open();
+            
+            var executor = new DeleteQueryExecutor(connection);
+            var (sql, command) = builder.Build();
+            command.Connection = connection;
+            return command.ExecuteNonQuery();
         }
 
         // Executar insert com connection automática

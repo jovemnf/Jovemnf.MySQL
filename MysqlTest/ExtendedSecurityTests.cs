@@ -33,6 +33,19 @@ public class ExtendedSecurityTests
     }
 
     [Fact]
+    public void TestEnumBasedWhere()
+    {
+        var builder = new UpdateQueryBuilder()
+            .Table("users")
+            .Set("active", true)
+            .Where("age", 18, QueryOperator.GreaterThanOrEqual);
+
+        var (sql, command) = builder.Build();
+        
+        Assert.Contains("`age` >= @p", sql);
+    }
+
+    [Fact]
     public void TestUpdateWithoutFields_ShouldThrow()
     {
         var builder = new UpdateQueryBuilder()
