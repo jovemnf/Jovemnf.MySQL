@@ -5,6 +5,8 @@ using System.Collections.Generic;
 using Jovemnf.DateTimeStamp;
 using System.Data.Common;
 using System.Threading.Tasks;
+using System.Reflection;
+using System.Linq;
 
 namespace Jovemnf.MySQL
 {
@@ -757,6 +759,99 @@ namespace Jovemnf.MySQL
             }
             catch { }
 
+            return list;
+        }
+
+        /// <summary>
+        /// Mapeia a linha atual para um modelo do tipo T.
+        /// </summary>
+        /// <typeparam name="T">O tipo do modelo a ser preenchido.</typeparam>
+        /// <returns>Uma instância de T preenchida com os dados da linha atual.</returns>
+        public T ToModel<T>() where T : new()
+        {
+            var model = new T();
+            var properties = typeof(T).GetProperties(BindingFlags.Public | BindingFlags.Instance);
+            var columns = GetColumnNames();
+
+            foreach (var prop in properties)
+            {
+                // Try exact match or case-insensitive match
+                string columnName = columns.FirstOrDefault(c => 
+                    string.Equals(c, prop.Name, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(c.Replace("_", ""), prop.Name, StringComparison.OrdinalIgnoreCase));
+                
+                if (columnName != null)
+                {
+                    object val = Get(columnName);
+                    if (val != null && val != DBNull.Value)
+                    {
+                        try
+                        {
+                            Type propType = Nullable.GetUnderlyingType(prop.PropertyType) ?? prop.PropertyType;
+                            
+                            if (propType == typeof(bool))
+                            {
+                                prop.SetValue(model, TryParse.ToBoolean(val));
+                            }
+                            else if (propType == typeof(DateTime) || propType == typeof(MyDateTime))
+                            {
+                                prop.SetValue(model, Convert.ToDateTime(val));
+                            }
+                            else if (propType.IsEnum)
+                            {
+                                prop.SetValue(model, Enum.Parse(propType, val.ToString()));
+                            }
+                            else
+                            {
+                                prop.SetValue(model, Convert.ChangeType(val, propType));
+                            }
+                        }
+                        catch
+                        {
+                            // Ignore mapping errors for individual properties
+                        }
+                    }
+                }
+            }
+
+            return model;
+        }
+
+        /// <summary>
+        /// Mapeia todas as linhas do resultado para uma lista de modelos do tipo T.
+        /// </summary>
+        /// <typeparam name="T">O tipo do modelo.</typeparam>
+        /// <returns>Lista de instâncias de T.</returns>
+        public List<T> ToModelList<T>() where T : new()
+        {
+            var list = new List<T>();
+            try
+            {
+                while (Read())
+                {
+                    list.Add(ToModel<T>());
+                }
+            }
+            catch { }
+            return list;
+        }
+
+        /// <summary>
+        /// Mapeia todas as linhas do resultado para uma lista de modelos do tipo T de forma assíncrona.
+        /// </summary>
+        /// <typeparam name="T">O tipo do modelo.</typeparam>
+        /// <returns>Task com lista de instâncias de T.</returns>
+        public async Task<List<T>> ToModelListAsync<T>() where T : new()
+        {
+            var list = new List<T>();
+            try
+            {
+                while (await ReadAsync())
+                {
+                    list.Add(ToModel<T>());
+                }
+            }
+            catch { }
             return list;
         }
     }

@@ -126,6 +126,39 @@ using (var mysql = new MySQL(config))
 }
 ```
 
+### Mapeamento Automático para Modelos (ORM)
+
+O `MySQLReader` permite mapear os resultados diretamente para classes C# (POCOs) usando reflexão. O mapeador é inteligente: ele ignora maiúsculas/minúsculas e também remove underscores ao comparar nomes de colunas com propriedades (ex: mapeia automaticamente a coluna `tipo_pessoa` para a propriedade `TipoPessoa`).
+
+```csharp
+public class Usuario
+{
+    public int Id { get; set; }
+    public string Nome { get; set; }
+    public string Email { get; set; }
+    public bool Ativo { get; set; }
+    public DateTime DataCadastro { get; set; }
+}
+
+// ...
+
+using (var mysql = new MySQL(config))
+{
+    await mysql.OpenAsync();
+    var builder = new SelectQueryBuilder().Table("usuarios").Where("id", 1);
+    
+    using var reader = await mysql.ExecuteQueryAsync(builder);
+    if (reader.Read())
+    {
+        // Mapeia uma única linha
+        Usuario user = reader.ToModel<Usuario>();
+    }
+}
+
+// Ou mapear uma lista completa:
+List<Usuario> users = await reader.ToModelListAsync<Usuario>();
+```
+
 ### Execução com Resultados Detalhados
 
 Use o `UpdateQueryExecutor` para obter informações detalhadas sobre a execução:
