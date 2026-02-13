@@ -7,6 +7,7 @@ using System.Data.Common;
 using System.Threading.Tasks;
 using System.Reflection;
 using System.Linq;
+using System.Text.Json;
 
 namespace Jovemnf.MySQL
 {
@@ -793,13 +794,77 @@ namespace Jovemnf.MySQL
                             {
                                 prop.SetValue(model, TryParse.ToBoolean(val));
                             }
-                            else if (propType == typeof(DateTime) || propType == typeof(MyDateTime))
+                            else if (propType == typeof(DateTime))
                             {
                                 prop.SetValue(model, Convert.ToDateTime(val));
                             }
                             else if (propType.IsEnum)
                             {
                                 prop.SetValue(model, Enum.Parse(propType, val.ToString()));
+                            }
+                            else if (val is string jsonString && IsJsonString(jsonString))
+                            {
+                                // Automatic JSON deserialization for complex types and custom date types
+                                try
+                                {
+                                    if (propType == typeof(MyDateTime))
+                                    {
+                                        var dateTime = JsonSerializer.Deserialize<DateTime>(jsonString);
+                                        prop.SetValue(model, new MyDateTime(dateTime));
+                                    }
+                                    else if (propType == typeof(MyDate))
+                                    {
+                                        var dateTime = JsonSerializer.Deserialize<DateTime>(jsonString);
+                                        prop.SetValue(model, new MyDate(dateTime));
+                                    }
+                                    else if (IsComplexType(propType))
+                                    {
+                                        // Use case-insensitive property matching for JSON deserialization
+                                        var options = new JsonSerializerOptions
+                                        {
+                                            PropertyNameCaseInsensitive = true,
+                                            PropertyNamingPolicy = null
+                                        };
+                                        var deserializedValue = JsonSerializer.Deserialize(jsonString, propType, options);
+                                        prop.SetValue(model, deserializedValue);
+                                    }
+                                    else
+                                    {
+                                        prop.SetValue(model, Convert.ChangeType(val, propType));
+                                    }
+                                }
+                                catch (Exception ex)
+                                {
+                                    // If JSON deserialization fails, try standard conversion
+                                    try
+                                    {
+                                        if (propType == typeof(MyDateTime))
+                                        {
+                                            prop.SetValue(model, new MyDateTime(Convert.ToDateTime(val)));
+                                        }
+                                        else if (propType == typeof(MyDate))
+                                        {
+                                            prop.SetValue(model, new MyDate(Convert.ToDateTime(val)));
+                                        }
+                                        else
+                                        {
+                                            prop.SetValue(model, Convert.ChangeType(val, propType));
+                                        }
+                                    }
+                                    catch 
+                                    { 
+                                        // Silently ignore if both JSON and standard conversion fail
+                                        // This allows partial object mapping to succeed
+                                    }
+                                }
+                            }
+                            else if (propType == typeof(MyDateTime))
+                            {
+                                prop.SetValue(model, new MyDateTime(Convert.ToDateTime(val)));
+                            }
+                            else if (propType == typeof(MyDate))
+                            {
+                                prop.SetValue(model, new MyDate(Convert.ToDateTime(val)));
                             }
                             else
                             {
@@ -815,6 +880,37 @@ namespace Jovemnf.MySQL
             }
 
             return model;
+        }
+
+        /// <summary>
+        /// Verifica se um tipo é complexo (não é um tipo primitivo ou string).
+        /// </summary>
+        /// <param name="type">O tipo a ser verificado.</param>
+        /// <returns>True se o tipo é complexo, caso contrário False.</returns>
+        private bool IsComplexType(Type type)
+        {
+            return !type.IsPrimitive 
+                && type != typeof(string) 
+                && type != typeof(decimal) 
+                && type != typeof(DateTime) 
+                && type != typeof(MyDateTime)
+                && type != typeof(MyDate)
+                && !type.IsEnum;
+        }
+
+        /// <summary>
+        /// Verifica se uma string é um JSON válido.
+        /// </summary>
+        /// <param name="str">A string a ser verificada.</param>
+        /// <returns>True se a string é um JSON válido, caso contrário False.</returns>
+        private bool IsJsonString(string str)
+        {
+            if (string.IsNullOrWhiteSpace(str))
+                return false;
+
+            str = str.Trim();
+            return (str.StartsWith("{") && str.EndsWith("}")) 
+                || (str.StartsWith("[") && str.EndsWith("]"));
         }
 
         /// <summary>

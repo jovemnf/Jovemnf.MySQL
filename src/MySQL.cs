@@ -170,33 +170,32 @@ namespace Jovemnf.MySQL
 
             try
             {
-                if (bdConn is null)
+                if (bdConn is not null) return;
+                
+                if (!string.IsNullOrEmpty(config.ConnectionString))
                 {
-                    if (!string.IsNullOrEmpty(config.ConnectionString))
+                    this.bdConn = new MySqlConnection(config.ConnectionString);
+                }
+                else
+                {
+                    MySqlConnectionStringBuilder conn_string = new()
                     {
-                        this.bdConn = new MySqlConnection(config.ConnectionString);
-                    }
-                    else
-                    {
-                        MySqlConnectionStringBuilder conn_string = new()
-                        {
-                            Server = config.Host,
-                            Port = config.Port,
-                            UserID = config.Username,
-                            Password = config.Password,
-                            Database = config.Database,
-                            CharacterSet = config.Charset,
-                            SslMode = MySqlSslMode.None,
-                            MaximumPoolSize = MaximumPoolSize,
-                            MinimumPoolSize = MinimumPoolSize,
-                            Pooling = Pooling,
-                            ConnectionTimeout = ConnectionTimeout,
-                            AllowUserVariables = AllowUserVariables,
-                            UseCompression = UseCompression
-                        };
+                        Server = config.Host,
+                        Port = config.Port,
+                        UserID = config.Username,
+                        Password = config.Password,
+                        Database = config.Database,
+                        CharacterSet = config.Charset,
+                        SslMode = MySqlSslMode.None,
+                        MaximumPoolSize = MaximumPoolSize,
+                        MinimumPoolSize = MinimumPoolSize,
+                        Pooling = Pooling,
+                        ConnectionTimeout = ConnectionTimeout,
+                        AllowUserVariables = AllowUserVariables,
+                        UseCompression = UseCompression
+                    };
 
-                        this.bdConn = new MySqlConnection(conn_string.ToString());
-                    }
+                    this.bdConn = new MySqlConnection(conn_string.ToString());
                 }
             }
             catch
@@ -249,17 +248,10 @@ namespace Jovemnf.MySQL
 
         public MySQL(string stringConnect)
         {
-            try
+            if (bdConn is null)
             {
-                if (bdConn is null)
-                {
-                    //this.bdDataSet = new DataSet();
-                    this.bdConn = new MySqlConnection(stringConnect);
-                }
-            }
-            catch
-            {
-                throw;
+                //this.bdDataSet = new DataSet();
+                this.bdConn = new MySqlConnection(stringConnect);
             }
         }
 
@@ -706,6 +698,30 @@ namespace Jovemnf.MySQL
                 this.cmd.Transaction = this.trans;
 
             return await ExecuteUpdateAsync();
+        }
+
+        public int ExecuteDeleteSync(DeleteQueryBuilder builder)
+        {
+            var (sql, command) = builder.Build();
+            this.cmd = command;
+            this.cmd.Connection = this.bdConn;
+            
+            if (this.trans != null)
+                this.cmd.Transaction = this.trans;
+
+            return this.cmd.ExecuteNonQuery();
+        }
+
+        public async Task<int> ExecuteDeleteAsync(DeleteQueryBuilder builder)
+        {
+            var (sql, command) = builder.Build();
+            this.cmd = command;
+            this.cmd.Connection = this.bdConn;
+            
+            if (this.trans != null)
+                this.cmd.Transaction = this.trans;
+
+            return await this.cmd.ExecuteNonQueryAsync();
         }
 
         /*

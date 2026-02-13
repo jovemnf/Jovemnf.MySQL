@@ -5,8 +5,10 @@ Pacote .NET Core de alto desempenho para interação simplificada com bancos de 
 ## ✨ Características
 
 - **Gerenciamento de Conexão:** Fácil configuração via `MySQLConfiguration`.
-- **Update Query Builder:** API fluente para construção de queries de UPDATE seguras.
-- **Segurança Nativa:** Proteção robusta contra SQL Injection (parametrização e escape de identificadores).
+- **Query Builders Fluentes:** APIs intuitivas para `SELECT`, `INSERT`, `UPDATE` e `DELETE`.
+- **Tipagem Forte:** Enum `QueryOperator` para evitar strings mágicas em operadores SQL.
+- **Segurança Nativa:** Proteção robusta contra SQL Injection (parametrização, escape de identificadores e proteção contra mass operations).
+- **Mapeamento Automático (ORM):** Conversão automática de resultados para classes C# (POCOs).
 - **Suporte a Transações:** Execução atômica de múltiplas operações.
 - **Async/Await:** Suporte completo para operações assíncronas.
 
@@ -129,6 +131,62 @@ using (var mysql = new MySQL(config))
 }
 ```
 
+### Fluent Delete Query Builder
+
+O `DeleteQueryBuilder` permite criar operações de exclusão de forma segura e fluente.
+
+```csharp
+// Delete com condições
+var builder = new DeleteQueryBuilder()
+    .Table("logs")
+    .Where("created_at", DateTime.Now.AddDays(-30), QueryOperator.LessThan)
+    .Limit(100);
+
+using (var mysql = new MySQL(config))
+{
+    await mysql.OpenAsync();
+    int deletedRows = await mysql.ExecuteDeleteAsync(builder);
+}
+
+// Mass Delete (Requer .All() explícito para segurança)
+var massDelete = new DeleteQueryBuilder()
+    .Table("temp_data")
+    .All(); // Obrigatório se não houver WHERE
+
+// Via DatabaseHelper
+var helper = new DatabaseHelper(connectionString);
+int rows = await helper.ExecuteDeleteAsync(builder);
+```
+
+#### Proteção contra Mass Delete
+Por padrão, o `DeleteQueryBuilder` **impede** a execução de `DELETE` sem cláusula `WHERE`. Para deletar todas as linhas de uma tabela, você deve chamar explicitamente `.All()`:
+
+```csharp
+// ❌ Isso lançará InvalidOperationException
+new DeleteQueryBuilder().Table("users").Build();
+
+// ✅ Isso funciona
+new DeleteQueryBuilder().Table("users").All().Build();
+```
+
+### QueryOperator Enum (Tipagem Forte)
+
+Todos os builders (`Update`, `Select`, `Delete`) suportam o enum `QueryOperator` para evitar strings mágicas:
+
+```csharp
+using Jovemnf.MySQL.Builder;
+
+var builder = new UpdateQueryBuilder()
+    .Table("products")
+    .Set("status", "discontinued")
+    .Where("stock", 0, QueryOperator.Equals)
+    .Where("last_sale", DateTime.Now.AddYears(-2), QueryOperator.LessThan);
+
+// Operadores disponíveis:
+// Equals, NotEquals, LessThan, LessThanOrEqual, GreaterThan, GreaterThanOrEqual
+// Like, NotLike, IsNull, IsNotNull, In, NotIn, Between, Regexp, NotRegexp
+```
+
 ### Mapeamento Automático para Modelos (ORM)
 
 O `MySQLReader` permite mapear os resultados diretamente para classes C# (POCOs) usando reflexão. O mapeador é inteligente: ele ignora maiúsculas/minúsculas e também remove underscores ao comparar nomes de colunas com propriedades (ex: mapeia automaticamente a coluna `tipo_pessoa` para a propriedade `TipoPessoa`).
@@ -210,9 +268,18 @@ Se você limpar o projeto ou clonar o repositório e ver este erro:
 
 O pacote `Jovemnf.MySQL` prioriza a segurança dos seus dados:
 
-1.  **Parametrização Automática:** Todos os valores passados ao `UpdateQueryBuilder` são automaticamente tratados como parâmetros SQL, prevenindo injeção nos dados.
+1.  **Parametrização Automática:** Todos os valores passados aos Query Builders são automaticamente tratados como parâmetros SQL, prevenindo injeção nos dados.
 2.  **Escape de Identificadores:** Nomes de tabelas e campos são escapados (backticks) para evitar injeção em nomes de colunas.
-3.  **Whitelist de Operadores:** A construção de queries aceita apenas uma lista pré-definida de operadores válidos, impedindo a inserção de comandos maliciosos na estrutura da query.
+3.  **Whitelist de Operadores:** A construção de queries aceita apenas uma lista pré-definida de operadores válidos (`=`, `<>`, `LIKE`, `IN`, `REGEXP`, etc.), impedindo a inserção de comandos maliciosos.
+4.  **Proteção contra Mass Operations:** `UpdateQueryBuilder` e `DeleteQueryBuilder` **bloqueiam** operações sem cláusula `WHERE` por padrão. Para executar atualizações ou exclusões em massa, você deve chamar explicitamente `.All()`, garantindo que essas operações perigosas sejam intencionais.
+
+```csharp
+// ❌ Isso lançará InvalidOperationException
+new UpdateQueryBuilder().Table("users").Set("active", false).Build();
+
+// ✅ Isso funciona (mass update intencional)
+new UpdateQueryBuilder().Table("users").Set("active", false).All().Build();
+```
 
 ## 📄 Licença
 

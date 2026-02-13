@@ -31,6 +31,7 @@
     <PackageReference Include="Jovemnf.DateTimeStamp" Version="0.0.5" />
     <!--<PackageReference Include="MySql.Data" Version="8.0.12" />-->
     <PackageReference Include="MySqlConnector" Version="2.5.0" />
+    <PackageReference Include="System.Text.Json" Version="9.0.1" />
   </ItemGroup>
 
   <ItemGroup>
