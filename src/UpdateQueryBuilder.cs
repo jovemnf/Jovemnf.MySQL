@@ -51,7 +51,6 @@ namespace Jovemnf.MySQL.Builder
                 throw new ArgumentException($"Operador não permitido: {op}");
             }
         }
-
         
         public UpdateQueryBuilder Set(string field, object value)
         {
@@ -263,6 +262,7 @@ namespace Jovemnf.MySQL.Builder
 
         public (string Sql, MySqlCommand Command) Build()
         {
+            _paramCounter = 0;
             if (string.IsNullOrEmpty(_tableName))
                 throw new InvalidOperationException("Nome da tabela não definido");
             
@@ -321,6 +321,11 @@ namespace Jovemnf.MySQL.Builder
             command.CommandText = sql;
             
             return (sql, command);
+        }
+
+        public override string ToString()
+        {
+            return Build().Sql;
         }
 
         private string BuildWhereClause(WhereCondition condition, MySqlCommand command)

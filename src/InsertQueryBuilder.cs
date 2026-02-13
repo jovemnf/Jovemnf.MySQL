@@ -134,6 +134,7 @@ public class InsertQueryBuilder
 
     public (string Sql, MySqlCommand Command) Build()
     {
+        _paramCounter = 0;
         if (string.IsNullOrEmpty(_tableName))
             throw new InvalidOperationException("Nome da tabela não definido");
         
@@ -172,6 +173,11 @@ public class InsertQueryBuilder
         command.CommandText = sql;
         
         return (sql, command);
+    }
+
+    public override string ToString()
+    {
+        return Build().Sql;
     }
 
     // Helper class to mark Point values for special handling

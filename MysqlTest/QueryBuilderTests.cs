@@ -117,6 +117,68 @@ public class QueryBuilderTests
     }
 
     [Fact]
+    public void TestUpdateToString()
+    {
+        var builder = new UpdateQueryBuilder()
+            .Table("users")
+            .Set("name", "Alice")
+            .Where("id", 1);
+
+        var sqlFromBuild = builder.Build().Sql;
+        var sqlFromToString = builder.ToString();
+
+        Assert.Equal(sqlFromBuild, sqlFromToString);
+        Assert.Contains("@p0", sqlFromToString);
+        Assert.Contains("@p1", sqlFromToString);
+
+        // Verify param counter reset by calling again
+        var sqlAgain = builder.ToString();
+        Assert.Equal(sqlFromToString, sqlAgain);
+    }
+
+    [Fact]
+    public void TestSelectToString()
+    {
+        var builder = new SelectQueryBuilder()
+            .Table("users")
+            .Where("id", 1);
+
+        var sqlFromBuild = builder.Build().Sql;
+        var sqlFromToString = builder.ToString();
+
+        Assert.Equal(sqlFromBuild, sqlFromToString);
+        Assert.Contains("@p0", sqlFromToString);
+    }
+
+    [Fact]
+    public void TestInsertToString()
+    {
+        var builder = new InsertQueryBuilder()
+            .Table("users")
+            .Value("name", "Bob");
+
+        var sqlFromBuild = builder.Build().Sql;
+        var sqlFromToString = builder.ToString();
+
+        Assert.Equal(sqlFromBuild, sqlFromToString);
+        Assert.Contains("@p0", sqlFromToString);
+    }
+
+    [Fact]
+    public void TestDeleteToString()
+    {
+        var builder = new DeleteQueryBuilder()
+            .Table("users")
+            .Where("id", 1);
+
+        var sqlFromBuild = builder.Build().Sql;
+        var sqlFromToString = builder.ToString();
+
+        Assert.Equal(sqlFromBuild, sqlFromToString);
+        Assert.Contains("@p0", sqlFromToString);
+    }
+
+    [Fact]
     public void TestMappingRobust()
     {
         // Teste de lógica de mapeamento (demonstrativo)

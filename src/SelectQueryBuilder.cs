@@ -133,6 +133,7 @@ public class SelectQueryBuilder
 
     public (string Sql, MySqlCommand Command) Build()
     {
+        _paramCounter = 0;
         if (string.IsNullOrEmpty(_tableName))
             throw new InvalidOperationException("Nome da tabela não definido");
 
@@ -180,6 +181,11 @@ public class SelectQueryBuilder
 
         command.CommandText = sql;
         return (sql, command);
+    }
+
+    public override string ToString()
+    {
+        return Build().Sql;
     }
 
     private string BuildWhereClause(WhereCondition condition, MySqlCommand command)
