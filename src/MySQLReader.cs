@@ -1,5 +1,6 @@
 //using MySql.Data.MySqlClient;
 using MySqlConnector;
+using Jovemnf.MySQL.Geometry;
 using System;
 using System.Collections.Generic;
 using Jovemnf.DateTimeStamp;
@@ -856,6 +857,25 @@ namespace Jovemnf.MySQL
                                         // Silently ignore if both JSON and standard conversion fail
                                         // This allows partial object mapping to succeed
                                     }
+                                }
+                            }
+                            else if (propType == typeof(Point))
+                            {
+                                // Handle GEOMETRY POINT type
+                                if (val is byte[] wkb)
+                                {
+                                    var point = Point.FromWKB(wkb);
+                                    prop.SetValue(model, point);
+                                }
+                            }
+                            else if (propType == typeof(Polygon))
+                            {
+                                // Handle GEOMETRY POLYGON type
+                                // Note: SELECT should use ST_AsText(polygon_column)
+                                if (val is string wkt)
+                                {
+                                    var polygon = Polygon.FromWKT(wkt);
+                                    prop.SetValue(model, polygon);
                                 }
                             }
                             else if (propType == typeof(MyDateTime))

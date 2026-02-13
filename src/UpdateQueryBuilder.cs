@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using MySqlConnector;
+using Jovemnf.MySQL.Geometry;
 
 namespace Jovemnf.MySQL.Builder
 {
@@ -53,7 +55,19 @@ namespace Jovemnf.MySQL.Builder
         
         public UpdateQueryBuilder Set(string field, object value)
         {
-            _fields[field] = value;
+            // Auto-detect GEOMETRY types
+            if (value is Point point)
+            {
+                _fields[field] = new PointValue(point);
+            }
+            else if (value is Polygon polygon)
+            {
+                _fields[field] = new PolygonValue(polygon);
+            }
+            else
+            {
+                _fields[field] = value;
+            }
             return this;
         }
 
@@ -62,6 +76,85 @@ namespace Jovemnf.MySQL.Builder
             foreach (var field in fields)
             {
                 _fields[field.Key] = field.Value;
+            }
+            return this;
+        }
+
+        /// <summary>
+        /// Define um campo com valor serializado como JSON.
+        /// </summary>
+        /// <param name="field">Nome do campo.</param>
+        /// <param name="value">Objeto a ser serializado para JSON.</param>
+        /// <returns>O builder para encadeamento.</returns>
+        public UpdateQueryBuilder SetAsJson(string field, object value)
+        {
+            if (value == null)
+            {
+                _fields[field] = DBNull.Value;
+            }
+            else
+            {
+                var json = JsonSerializer.Serialize(value);
+                _fields[field] = json;
+            }
+            return this;
+        }
+
+        /// <summary>
+        /// Define um campo com valor serializado como JSON usando opções customizadas.
+        /// </summary>
+        /// <param name="field">Nome do campo.</param>
+        /// <param name="value">Objeto a ser serializado para JSON.</param>
+        /// <param name="options">Opções de serialização JSON.</param>
+        /// <returns>O builder para encadeamento.</returns>
+        public UpdateQueryBuilder SetAsJson(string field, object value, JsonSerializerOptions options)
+        {
+            if (value == null)
+            {
+                _fields[field] = DBNull.Value;
+            }
+            else
+            {
+                var json = JsonSerializer.Serialize(value, options);
+                _fields[field] = json;
+            }
+            return this;
+        }
+
+        /// <summary>
+        /// Define um campo GEOMETRY POINT usando ST_GeomFromWKB.
+        /// </summary>
+        /// <param name="field">Nome do campo.</param>
+        /// <param name="point">Objeto Point a ser atualizado.</param>
+        /// <returns>O builder para encadeamento.</returns>
+        public UpdateQueryBuilder SetAsPoint(string field, Point point)
+        {
+            if (point == null)
+            {
+                _fields[field] = DBNull.Value;
+            }
+            else
+            {
+                _fields[field] = new PointValue(point);
+            }
+            return this;
+        }
+
+        /// <summary>
+        /// Define um campo GEOMETRY POLYGON usando ST_PolygonFromText.
+        /// </summary>
+        /// <param name="field">Nome do campo.</param>
+        /// <param name="polygon">Objeto Polygon a ser atualizado.</param>
+        /// <returns>O builder para encadeamento.</returns>
+        public UpdateQueryBuilder SetAsPolygon(string field, Polygon polygon)
+        {
+            if (polygon == null)
+            {
+                _fields[field] = DBNull.Value;
+            }
+            else
+            {
+                _fields[field] = new PolygonValue(polygon);
             }
             return this;
         }
@@ -186,8 +279,22 @@ namespace Jovemnf.MySQL.Builder
             foreach (var field in _fields)
             {
                 var paramName = GetNextParamName();
-                setClauses.Add($"`{EscapeIdentifier(field.Key)}` = @{paramName}");
-                command.Parameters.AddWithValue($"@{paramName}", field.Value ?? DBNull.Value);
+                
+                if (field.Value is PointValue pointValue)
+                {
+                    setClauses.Add($"`{EscapeIdentifier(field.Key)}` = ST_GeomFromWKB(@{paramName}, {pointValue.Point.SRID})");
+                    command.Parameters.AddWithValue($"@{paramName}", pointValue.Point.ToWKB());
+                }
+                else if (field.Value is PolygonValue polygonValue)
+                {
+                    setClauses.Add($"`{EscapeIdentifier(field.Key)}` = ST_PolygonFromText(@{paramName}, {polygonValue.Polygon.SRID})");
+                    command.Parameters.AddWithValue($"@{paramName}", polygonValue.Polygon.ToWKT());
+                }
+                else
+                {
+                    setClauses.Add($"`{EscapeIdentifier(field.Key)}` = @{paramName}");
+                    command.Parameters.AddWithValue($"@{paramName}", field.Value ?? DBNull.Value);
+                }
             }
 
             // WHERE clause
@@ -262,6 +369,20 @@ namespace Jovemnf.MySQL.Builder
             public List<object> Values { get; set; }
             public string Operator { get; set; }
             public string Logic { get; set; }
+        }
+
+        // Helper class to mark Point values for special handling
+        private class PointValue
+        {
+            public Point Point { get; }
+            public PointValue(Point point) => Point = point;
+        }
+
+        // Helper class to mark Polygon values for special handling
+        private class PolygonValue
+        {
+            public Polygon Polygon { get; }
+            public PolygonValue(Polygon polygon) => Polygon = polygon;
         }
     }
 
