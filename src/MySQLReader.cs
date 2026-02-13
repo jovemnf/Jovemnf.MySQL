@@ -777,10 +777,14 @@ namespace Jovemnf.MySQL
 
             foreach (var prop in properties)
             {
+                // Check for DbField attribute
+                var dbFieldAttr = prop.GetCustomAttribute<DbFieldAttribute>(inherit: true);
+                string targetColumnName = dbFieldAttr?.Name ?? prop.Name;
+
                 // Try exact match or case-insensitive match
                 string columnName = columns.FirstOrDefault(c => 
-                    string.Equals(c, prop.Name, StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(c.Replace("_", ""), prop.Name, StringComparison.OrdinalIgnoreCase));
+                    string.Equals(c, targetColumnName, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(c.Replace("_", ""), targetColumnName, StringComparison.OrdinalIgnoreCase));
                 
                 if (columnName != null)
                 {

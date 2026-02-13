@@ -11,6 +11,7 @@ Pacote .NET Core de alto desempenho para interação simplificada com bancos de 
 - **Mapeamento Automático (ORM):** Conversão automática de resultados para classes C# (POCOs).
 - **Suporte a Transações:** Execução atômica de múltiplas operações.
 - **Async/Await:** Suporte completo para operações assíncronas.
+- **Mapeamento Avançado:** Atributos `DbTable` e `DbField` para controle total sobre nomes de tabelas e colunas, com suporte a `snake_case`.
 
 ## 🚀 Instalação
 
@@ -221,6 +222,63 @@ using (var mysql = new MySQL(config))
 
 // Ou mapear uma lista completa:
 List<Usuario> users = await reader.ToModelListAsync<Usuario>();
+```
+
+### 🏷️ Mapeamento Avançado (Atributos)
+
+Você pode usar os atributos `DbTable` e `DbField` para definir explicitamente os nomes das tabelas e colunas, permitindo que os Builders resolvam esses nomes automaticamente.
+
+```csharp
+[DbTable("usuarios_v2")] // Define o nome da tabela no DB
+public class Usuario
+{
+    [DbField("user_id")] // Define o nome da coluna no DB
+    public int Id { get; set; }
+
+    [DbField("full_name")]
+    public string NomeCompleto { get; set; }
+}
+```
+
+#### Builders Genéricos
+
+Ao usar a versão genérica dos Builders, o nome da tabela e os mapeamentos de campos são resolvidos automaticamente:
+
+```csharp
+// Nome da tabela "usuarios_v2" e coluna "user_id" resolvidos automaticamente via atributos
+var sql = SelectQueryBuilder.For<Usuario>()
+    .Select("Id", "NomeCompleto") // Mapeia para user_id, full_name
+    .Where("Id", 1)              // Mapeia para user_id
+    .OrderBy("NomeCompleto")      // Mapeia para full_name
+    .ToString();
+
+// Suporte a snake_case
+// Você pode usar a versão snake_case da propriedade mesmo sem o atributo
+var sql2 = SelectQueryBuilder.For<Usuario>()
+    .Where("nome_completo", "Maria") // Resolve para a coluna full_name
+    .ToString();
+```
+
+Isso funciona para todos os builders:
+- `SelectQueryBuilder<T>`
+- `InsertQueryBuilder<T>`
+- `UpdateQueryBuilder<T>`
+- `DeleteQueryBuilder<T>`
+
+#### Exemplo com Insert e Update
+```csharp
+var user = new Usuario { Id = 1, NomeCompleto = "João Silva" };
+
+// Insert
+var insert = new InsertQueryBuilder<Usuario>()
+    .Values(user.ToDictionary()) // Mapeia propriedades para colunas automaticamente
+    .ToString();
+
+// Update
+var update = new UpdateQueryBuilder<Usuario>()
+    .Set("NomeCompleto", "João Modificado")
+    .Where("Id", user.Id)
+    .ToString();
 ```
 
 ### Execução com Resultados Detalhados

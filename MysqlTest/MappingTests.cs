@@ -75,4 +75,34 @@ public class MappingTests
         Assert.Equal(new DateTime(1995, 5, 5), model.DataNascimento);
         Assert.Equal(99, model.NullableInt);
     }
+
+    [Fact]
+    public void TestToModel_DbFieldMapping()
+    {
+        var data = new List<Dictionary<string, object>>
+        {
+            new Dictionary<string, object>
+            {
+                { "user_id", 30 },
+                { "fullname", "Attribute User" }
+            }
+        };
+
+        using var reader = new MySQLReader(new FakeDataReader(data));
+        reader.Read();
+        
+        var model = reader.ToModel<ModelWithAttributes>();
+
+        Assert.Equal(30, model.Id);
+        Assert.Equal("Attribute User", model.Name);
+    }
+}
+
+public class ModelWithAttributes
+{
+    [DbField("user_id")]
+    public int Id { get; set; }
+
+    [DbField("fullname")]
+    public string Name { get; set; }
 }

@@ -2,13 +2,18 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Reflection;
 using MySqlConnector;
 
 namespace Jovemnf.MySQL.Builder
 {
     public class DeleteQueryBuilder
     {
-        private string _tableName;
+        protected string _tableName;
+
+        public static DeleteQueryBuilder For<T>() => new DeleteQueryBuilder<T>();
+
+        protected virtual string ResolveField(string field) => field;
         private List<WhereCondition> _whereConditions = new List<WhereCondition>();
         private int _paramCounter = 0;
         private bool _allowAll = false;
@@ -41,7 +46,7 @@ namespace Jovemnf.MySQL.Builder
             ValidateOperator(op);
             _whereConditions.Add(new WhereCondition 
             { 
-                Field = field, 
+                Field = ResolveField(field), 
                 Value = value, 
                 Operator = op,
                 Logic = "AND"
@@ -58,7 +63,7 @@ namespace Jovemnf.MySQL.Builder
         {
             _whereConditions.Add(new WhereCondition 
             { 
-                Field = field, 
+                Field = ResolveField(field), 
                 Values = values.Cast<object>().ToList(), 
                 Operator = "IN",
                 Logic = "AND"
@@ -70,7 +75,7 @@ namespace Jovemnf.MySQL.Builder
         {
             _whereConditions.Add(new WhereCondition 
             { 
-                Field = field, 
+                Field = ResolveField(field), 
                 Values = values.Cast<object>().ToList(), 
                 Operator = "NOT IN",
                 Logic = "AND"
@@ -83,7 +88,7 @@ namespace Jovemnf.MySQL.Builder
             ValidateOperator(op);
             _whereConditions.Add(new WhereCondition 
             { 
-                Field = field, 
+                Field = ResolveField(field), 
                 Value = value, 
                 Operator = op,
                 Logic = "OR"
@@ -100,7 +105,7 @@ namespace Jovemnf.MySQL.Builder
         {
             _whereConditions.Add(new WhereCondition 
             { 
-                Field = field, 
+                Field = ResolveField(field), 
                 Operator = "IS NULL",
                 Logic = "AND"
             });
@@ -111,7 +116,7 @@ namespace Jovemnf.MySQL.Builder
         {
             _whereConditions.Add(new WhereCondition 
             { 
-                Field = field, 
+                Field = ResolveField(field), 
                 Operator = "IS NOT NULL",
                 Logic = "AND"
             });
@@ -122,7 +127,7 @@ namespace Jovemnf.MySQL.Builder
         {
             _whereConditions.Add(new WhereCondition 
             { 
-                Field = field,
+                Field = ResolveField(field),
                 Value = start,
                 SecondValue = end,
                 Operator = "BETWEEN",
@@ -135,7 +140,7 @@ namespace Jovemnf.MySQL.Builder
         {
             _whereConditions.Add(new WhereCondition 
             { 
-                Field = field,
+                Field = ResolveField(field),
                 Value = pattern,
                 Operator = "LIKE",
                 Logic = "AND"
@@ -190,6 +195,12 @@ namespace Jovemnf.MySQL.Builder
             command.CommandText = sql;
             
             return (sql, command);
+        }
+
+        protected static string GetTableName<T>()
+        {
+            var attr = (DbTableAttribute)Attribute.GetCustomAttribute(typeof(T), typeof(DbTableAttribute));
+            return attr?.Name ?? typeof(T).Name;
         }
 
         public override string ToString()
@@ -257,6 +268,35 @@ namespace Jovemnf.MySQL.Builder
             public List<object> Values { get; set; }
             public string Operator { get; set; }
             public string Logic { get; set; }
+        }
+    }
+
+    public class DeleteQueryBuilder<T> : DeleteQueryBuilder
+    {
+        private static readonly Dictionary<string, string> _fieldMapping = CreateFieldMapping();
+
+        private static Dictionary<string, string> CreateFieldMapping()
+        {
+            var mapping = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var p in typeof(T).GetProperties())
+            {
+                var attr = p.GetCustomAttribute<DbFieldAttribute>(true);
+                var columnName = attr?.Name ?? p.Name;
+                
+                mapping[p.Name] = columnName;
+                mapping[p.Name.ToSnakeCase()] = columnName;
+            }
+            return mapping;
+        }
+
+        public DeleteQueryBuilder()
+        {
+            Table(GetTableName<T>());
+        }
+
+        protected override string ResolveField(string field)
+        {
+            return _fieldMapping.TryGetValue(field, out var column) ? column : field;
         }
     }
     

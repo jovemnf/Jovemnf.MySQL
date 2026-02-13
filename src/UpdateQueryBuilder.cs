@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
+using System.Reflection;
 using MySqlConnector;
 using Jovemnf.MySQL.Geometry;
 
@@ -10,7 +11,11 @@ namespace Jovemnf.MySQL.Builder
 {
     public class UpdateQueryBuilder
     {
-        private string _tableName;
+        protected string _tableName;
+
+        public static UpdateQueryBuilder For<T>() => new UpdateQueryBuilder<T>();
+
+        protected virtual string ResolveField(string field) => field;
         private Dictionary<string, object> _fields = new Dictionary<string, object>();
         private List<WhereCondition> _whereConditions = new List<WhereCondition>();
 // ... (skip unchanged lines) ...
@@ -54,6 +59,7 @@ namespace Jovemnf.MySQL.Builder
         
         public UpdateQueryBuilder Set(string field, object value)
         {
+            field = ResolveField(field);
             // Auto-detect GEOMETRY types
             if (value is Point point)
             {
@@ -74,7 +80,7 @@ namespace Jovemnf.MySQL.Builder
         {
             foreach (var field in fields)
             {
-                _fields[field.Key] = field.Value;
+                _fields[ResolveField(field.Key)] = field.Value;
             }
             return this;
         }
@@ -87,6 +93,7 @@ namespace Jovemnf.MySQL.Builder
         /// <returns>O builder para encadeamento.</returns>
         public UpdateQueryBuilder SetAsJson(string field, object value)
         {
+            field = ResolveField(field);
             if (value == null)
             {
                 _fields[field] = DBNull.Value;
@@ -108,6 +115,7 @@ namespace Jovemnf.MySQL.Builder
         /// <returns>O builder para encadeamento.</returns>
         public UpdateQueryBuilder SetAsJson(string field, object value, JsonSerializerOptions options)
         {
+            field = ResolveField(field);
             if (value == null)
             {
                 _fields[field] = DBNull.Value;
@@ -128,6 +136,7 @@ namespace Jovemnf.MySQL.Builder
         /// <returns>O builder para encadeamento.</returns>
         public UpdateQueryBuilder SetAsPoint(string field, Point point)
         {
+            field = ResolveField(field);
             if (point == null)
             {
                 _fields[field] = DBNull.Value;
@@ -147,6 +156,7 @@ namespace Jovemnf.MySQL.Builder
         /// <returns>O builder para encadeamento.</returns>
         public UpdateQueryBuilder SetAsPolygon(string field, Polygon polygon)
         {
+            field = ResolveField(field);
             if (polygon == null)
             {
                 _fields[field] = DBNull.Value;
@@ -163,7 +173,7 @@ namespace Jovemnf.MySQL.Builder
             ValidateOperator(op);
             _whereConditions.Add(new WhereCondition 
             { 
-                Field = field, 
+                Field = ResolveField(field), 
                 Value = value, 
                 Operator = op,
                 Logic = "AND"
@@ -180,7 +190,7 @@ namespace Jovemnf.MySQL.Builder
         {
             _whereConditions.Add(new WhereCondition 
             { 
-                Field = field, 
+                Field = ResolveField(field), 
                 Values = values.Cast<object>().ToList(), 
                 Operator = "IN",
                 Logic = "AND"
@@ -192,7 +202,7 @@ namespace Jovemnf.MySQL.Builder
         {
             _whereConditions.Add(new WhereCondition 
             { 
-                Field = field, 
+                Field = ResolveField(field), 
                 Values = values.Cast<object>().ToList(), 
                 Operator = "NOT IN",
                 Logic = "AND"
@@ -205,7 +215,7 @@ namespace Jovemnf.MySQL.Builder
             ValidateOperator(op);
             _whereConditions.Add(new WhereCondition 
             { 
-                Field = field, 
+                Field = ResolveField(field), 
                 Value = value, 
                 Operator = op,
                 Logic = "OR"
@@ -217,7 +227,7 @@ namespace Jovemnf.MySQL.Builder
         {
             _whereConditions.Add(new WhereCondition 
             { 
-                Field = field, 
+                Field = ResolveField(field), 
                 Operator = "IS NULL",
                 Logic = "AND"
             });
@@ -228,7 +238,7 @@ namespace Jovemnf.MySQL.Builder
         {
             _whereConditions.Add(new WhereCondition 
             { 
-                Field = field, 
+                Field = ResolveField(field), 
                 Operator = "IS NOT NULL",
                 Logic = "AND"
             });
@@ -239,7 +249,7 @@ namespace Jovemnf.MySQL.Builder
         {
             _whereConditions.Add(new WhereCondition 
             { 
-                Field = field,
+                Field = ResolveField(field),
                 Value = start,
                 SecondValue = end,
                 Operator = "BETWEEN",
@@ -252,7 +262,7 @@ namespace Jovemnf.MySQL.Builder
         {
             _whereConditions.Add(new WhereCondition 
             { 
-                Field = field,
+                Field = ResolveField(field),
                 Value = pattern,
                 Operator = "LIKE",
                 Logic = "AND"
@@ -323,6 +333,12 @@ namespace Jovemnf.MySQL.Builder
             return (sql, command);
         }
 
+        protected static string GetTableName<T>()
+        {
+            var attr = (DbTableAttribute)Attribute.GetCustomAttribute(typeof(T), typeof(DbTableAttribute));
+            return attr?.Name ?? typeof(T).Name;
+        }
+
         public override string ToString()
         {
             return Build().Sql;
@@ -388,6 +404,35 @@ namespace Jovemnf.MySQL.Builder
         {
             public Polygon Polygon { get; }
             public PolygonValue(Polygon polygon) => Polygon = polygon;
+        }
+    }
+
+    public class UpdateQueryBuilder<T> : UpdateQueryBuilder
+    {
+        private static readonly Dictionary<string, string> _fieldMapping = CreateFieldMapping();
+
+        private static Dictionary<string, string> CreateFieldMapping()
+        {
+            var mapping = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var p in typeof(T).GetProperties())
+            {
+                var attr = p.GetCustomAttribute<DbFieldAttribute>(true);
+                var columnName = attr?.Name ?? p.Name;
+                
+                mapping[p.Name] = columnName;
+                mapping[p.Name.ToSnakeCase()] = columnName;
+            }
+            return mapping;
+        }
+
+        public UpdateQueryBuilder()
+        {
+            Table(GetTableName<T>());
+        }
+
+        protected override string ResolveField(string field)
+        {
+            return _fieldMapping.TryGetValue(field, out var column) ? column : field;
         }
     }
 

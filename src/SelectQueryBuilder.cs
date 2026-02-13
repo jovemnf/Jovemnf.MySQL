@@ -2,13 +2,16 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Reflection;
 using MySqlConnector;
 
 namespace Jovemnf.MySQL.Builder;
 
 public class SelectQueryBuilder
 {
-    private string _tableName;
+    protected string _tableName;
+
+    public static SelectQueryBuilder For<T>() => new SelectQueryBuilder<T>();
     private List<string> _fields = new List<string>();
     private List<JoinClause> _joins = new List<JoinClause>();
     private List<WhereCondition> _whereConditions = new List<WhereCondition>();
@@ -47,7 +50,7 @@ public class SelectQueryBuilder
 
     public SelectQueryBuilder Select(params string[] fields)
     {
-        _fields.AddRange(fields);
+        _fields.AddRange(fields.Select(ResolveField));
         return this;
     }
 
@@ -61,7 +64,14 @@ public class SelectQueryBuilder
 
     public SelectQueryBuilder Join(string table, string first, string op, string second, string type = "INNER")
     {
-        _joins.Add(new JoinClause { Table = table, First = first, Operator = op, Second = second, Type = type });
+        _joins.Add(new JoinClause 
+        { 
+            Table = table, 
+            First = first.Contains(".") ? first : ResolveField(first), 
+            Operator = op, 
+            Second = second.Contains(".") ? second : ResolveField(second), 
+            Type = type 
+        });
         return this;
     }
 
@@ -71,56 +81,56 @@ public class SelectQueryBuilder
     public SelectQueryBuilder Where(string field, object value, string op = "=")
     {
         ValidateOperator(op);
-        _whereConditions.Add(new WhereCondition { Field = field, Value = value, Operator = op, Logic = "AND" });
+        _whereConditions.Add(new WhereCondition { Field = ResolveField(field), Value = value, Operator = op, Logic = "AND" });
         return this;
     }
 
     public SelectQueryBuilder OrWhere(string field, object value, string op = "=")
     {
         ValidateOperator(op);
-        _whereConditions.Add(new WhereCondition { Field = field, Value = value, Operator = op, Logic = "OR" });
+        _whereConditions.Add(new WhereCondition { Field = ResolveField(field), Value = value, Operator = op, Logic = "OR" });
         return this;
     }
 
     public SelectQueryBuilder WhereIn<T>(string field, IEnumerable<T> values)
     {
-        _whereConditions.Add(new WhereCondition { Field = field, Values = values.Cast<object>().ToList(), Operator = "IN", Logic = "AND" });
+        _whereConditions.Add(new WhereCondition { Field = ResolveField(field), Values = values.Cast<object>().ToList(), Operator = "IN", Logic = "AND" });
         return this;
     }
 
     public SelectQueryBuilder WhereNotIn<T>(string field, IEnumerable<T> values)
     {
-        _whereConditions.Add(new WhereCondition { Field = field, Values = values.Cast<object>().ToList(), Operator = "NOT IN", Logic = "AND" });
+        _whereConditions.Add(new WhereCondition { Field = ResolveField(field), Values = values.Cast<object>().ToList(), Operator = "NOT IN", Logic = "AND" });
         return this;
     }
 
     public SelectQueryBuilder WhereNull(string field)
     {
-        _whereConditions.Add(new WhereCondition { Field = field, Operator = "IS NULL", Logic = "AND" });
+        _whereConditions.Add(new WhereCondition { Field = ResolveField(field), Operator = "IS NULL", Logic = "AND" });
         return this;
     }
 
     public SelectQueryBuilder WhereNotNull(string field)
     {
-        _whereConditions.Add(new WhereCondition { Field = field, Operator = "IS NOT NULL", Logic = "AND" });
+        _whereConditions.Add(new WhereCondition { Field = ResolveField(field), Operator = "IS NOT NULL", Logic = "AND" });
         return this;
     }
 
     public SelectQueryBuilder WhereBetween(string field, object start, object end)
     {
-        _whereConditions.Add(new WhereCondition { Field = field, Value = start, SecondValue = end, Operator = "BETWEEN", Logic = "AND" });
+        _whereConditions.Add(new WhereCondition { Field = ResolveField(field), Value = start, SecondValue = end, Operator = "BETWEEN", Logic = "AND" });
         return this;
     }
 
     public SelectQueryBuilder WhereLike(string field, string pattern)
     {
-        _whereConditions.Add(new WhereCondition { Field = field, Value = pattern, Operator = "LIKE", Logic = "AND" });
+        _whereConditions.Add(new WhereCondition { Field = ResolveField(field), Value = pattern, Operator = "LIKE", Logic = "AND" });
         return this;
     }
 
     public SelectQueryBuilder OrderBy(string field, string direction = "ASC")
     {
-        _orderBys.Add($"{EscapeIdentifier(field)} {direction.ToUpper()}");
+        _orderBys.Add($"{EscapeIdentifier(ResolveField(field))} {direction.ToUpper()}");
         return this;
     }
 
@@ -183,6 +193,12 @@ public class SelectQueryBuilder
         return (sql, command);
     }
 
+    protected static string GetTableName<T>()
+    {
+        var attr = (DbTableAttribute)Attribute.GetCustomAttribute(typeof(T), typeof(DbTableAttribute));
+        return attr?.Name ?? typeof(T).Name;
+    }
+
     public override string ToString()
     {
         return Build().Sql;
@@ -240,6 +256,37 @@ public class SelectQueryBuilder
         public List<object> Values { get; set; }
         public string Operator { get; set; }
         public string Logic { get; set; }
+    }
+
+    protected virtual string ResolveField(string field) => field;
+}
+
+public class SelectQueryBuilder<T> : SelectQueryBuilder
+{
+    private static readonly Dictionary<string, string> _fieldMapping = CreateFieldMapping();
+
+    private static Dictionary<string, string> CreateFieldMapping()
+    {
+        var mapping = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var p in typeof(T).GetProperties())
+        {
+            var attr = p.GetCustomAttribute<DbFieldAttribute>(true);
+            var columnName = attr?.Name ?? p.Name;
+            
+            mapping[p.Name] = columnName;
+            mapping[p.Name.ToSnakeCase()] = columnName;
+        }
+        return mapping;
+    }
+
+    public SelectQueryBuilder()
+    {
+        Table(GetTableName<T>());
+    }
+
+    protected override string ResolveField(string field)
+    {
+        return _fieldMapping.TryGetValue(field, out var column) ? column : field;
     }
 }
 

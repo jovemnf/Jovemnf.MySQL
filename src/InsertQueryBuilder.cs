@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
+using System.Reflection;
 using MySqlConnector;
 using Jovemnf.MySQL.Geometry;
 
@@ -10,9 +11,13 @@ namespace Jovemnf.MySQL.Builder;
 
 public class InsertQueryBuilder
 {
-    private string _tableName;
+    protected string _tableName;
     private Dictionary<string, object> _fields = new Dictionary<string, object>();
     private int _paramCounter = 0;
+
+    public static InsertQueryBuilder For<T>() => new InsertQueryBuilder<T>();
+
+    protected virtual string ResolveField(string field) => field;
 
     private string EscapeIdentifier(string identifier)
     {
@@ -28,6 +33,7 @@ public class InsertQueryBuilder
 
     public InsertQueryBuilder Value(string field, object value)
     {
+        field = ResolveField(field);
         // Auto-detect GEOMETRY types
         if (value is Point point)
         {
@@ -48,7 +54,7 @@ public class InsertQueryBuilder
     {
         foreach (var field in fields)
         {
-            _fields[field.Key] = field.Value;
+            _fields[ResolveField(field.Key)] = field.Value;
         }
         return this;
     }
@@ -61,6 +67,7 @@ public class InsertQueryBuilder
     /// <returns>O builder para encadeamento.</returns>
     public InsertQueryBuilder ValueAsJson(string field, object value)
     {
+        field = ResolveField(field);
         if (value == null)
         {
             _fields[field] = DBNull.Value;
@@ -82,6 +89,7 @@ public class InsertQueryBuilder
     /// <returns>O builder para encadeamento.</returns>
     public InsertQueryBuilder ValueAsJson(string field, object value, JsonSerializerOptions options)
     {
+        field = ResolveField(field);
         if (value == null)
         {
             _fields[field] = DBNull.Value;
@@ -102,6 +110,7 @@ public class InsertQueryBuilder
     /// <returns>O builder para encadeamento.</returns>
     public InsertQueryBuilder ValueAsPoint(string field, Point point)
     {
+        field = ResolveField(field);
         if (point == null)
         {
             _fields[field] = DBNull.Value;
@@ -121,6 +130,7 @@ public class InsertQueryBuilder
     /// <returns>O builder para encadeamento.</returns>
     public InsertQueryBuilder ValueAsPolygon(string field, Polygon polygon)
     {
+        field = ResolveField(field);
         if (polygon == null)
         {
             _fields[field] = DBNull.Value;
@@ -175,6 +185,12 @@ public class InsertQueryBuilder
         return (sql, command);
     }
 
+    protected static string GetTableName<T>()
+    {
+        var attr = (DbTableAttribute)Attribute.GetCustomAttribute(typeof(T), typeof(DbTableAttribute));
+        return attr?.Name ?? typeof(T).Name;
+    }
+
     public override string ToString()
     {
         return Build().Sql;
@@ -192,6 +208,35 @@ public class InsertQueryBuilder
     {
         public Polygon Polygon { get; }
         public PolygonValue(Polygon polygon) => Polygon = polygon;
+    }
+}
+
+public class InsertQueryBuilder<T> : InsertQueryBuilder
+{
+    private static readonly Dictionary<string, string> _fieldMapping = CreateFieldMapping();
+
+    private static Dictionary<string, string> CreateFieldMapping()
+    {
+        var mapping = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var p in typeof(T).GetProperties())
+        {
+            var attr = p.GetCustomAttribute<DbFieldAttribute>(true);
+            var columnName = attr?.Name ?? p.Name;
+            
+            mapping[p.Name] = columnName;
+            mapping[p.Name.ToSnakeCase()] = columnName;
+        }
+        return mapping;
+    }
+
+    public InsertQueryBuilder()
+    {
+        Table(GetTableName<T>());
+    }
+
+    protected override string ResolveField(string field)
+    {
+        return _fieldMapping.TryGetValue(field, out var column) ? column : field;
     }
 }
 
