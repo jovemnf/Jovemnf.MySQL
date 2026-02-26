@@ -538,6 +538,26 @@ namespace Jovemnf.MySQL
             return await ExecuteQueryAsync();
         }
 
+        public long ExecuteCountSync(SelectQueryBuilder builder)
+        {
+            var (sql, command) = builder.Build();
+            this.cmd = command;
+            this.cmd.Connection = this.bdConn;
+            if (this.trans != null) this.cmd.Transaction = this.trans;
+            var result = this.cmd.ExecuteScalar();
+            return Convert.ToInt64(result);
+        }
+
+        public async Task<long> ExecuteCountAsync(SelectQueryBuilder builder)
+        {
+            var (sql, command) = builder.Build();
+            this.cmd = command;
+            this.cmd.Connection = this.bdConn;
+            if (this.trans != null) this.cmd.Transaction = this.trans;
+            var result = await this.cmd.ExecuteScalarAsync();
+            return Convert.ToInt64(result);
+        }
+
         public void BeginSync()
         {
             try
@@ -896,6 +916,31 @@ namespace Jovemnf.MySQL
         }
 
         /// <summary>
+        /// Prepara o comando para execução no servidor (Server-side Prepared Statement).
+        /// Melhora a performance em execuções repetitivas.
+        /// </summary>
+        public void Prepare()
+        {
+            if (this.cmd == null)
+            {
+                throw new InvalidOperationException("Comando não foi inicializado. Chame OpenCommand primeiro.");
+            }
+            this.cmd.Prepare();
+        }
+
+        /// <summary>
+        /// Prepara o comando assincronamente para execução no servidor.
+        /// </summary>
+        public async Task PrepareAsync()
+        {
+            if (this.cmd == null)
+            {
+                throw new InvalidOperationException("Comando não foi inicializado. Chame OpenCommand primeiro.");
+            }
+            await this.cmd.PrepareAsync();
+        }
+
+        /// <summary>
         /// Adiciona um parâmetro ao comando SQL com tipo específico.
         /// </summary>
         /// <param name="param">Nome do parâmetro (ex: @nome).</param>
@@ -940,6 +985,22 @@ namespace Jovemnf.MySQL
         /// </summary>
         public bool HasActiveTransaction => InitTrans && trans != null;
 
+        public object ExecuteScalarSync()
+        {
+            try
+            {
+                if (this.cmd == null)
+                {
+                    throw new InvalidOperationException("Comando não foi inicializado. Chame OpenCommand primeiro.");
+                }
+                return this.cmd.ExecuteScalar();
+            }
+            catch (Exception ex)
+            {
+                throw new MySQLConnectException($"Erro ao executar ExecuteScalar: {ex.Message}", ex);
+            }
+        }
+
         /// <summary>
         /// Executa um comando e retorna um único valor (ExecuteScalar).
         /// </summary>
@@ -967,6 +1028,22 @@ namespace Jovemnf.MySQL
             catch (Exception ex)
             {
                 throw new MySQLConnectException($"Erro ao executar ExecuteScalar: {ex.Message}", ex);
+            }
+        }
+
+        public async Task<object> ExecuteScalarAsync()
+        {
+            try
+            {
+                if (this.cmd == null)
+                {
+                    throw new InvalidOperationException("Comando não foi inicializado. Chame OpenCommand primeiro.");
+                }
+                return await this.cmd.ExecuteScalarAsync();
+            }
+            catch (Exception ex)
+            {
+                throw new MySQLConnectException($"Erro ao executar ExecuteScalarAsync: {ex.Message}", ex);
             }
         }
 

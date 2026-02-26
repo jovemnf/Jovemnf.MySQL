@@ -12,7 +12,7 @@ public class SelectQueryBuilder
     protected string _tableName;
 
     public static SelectQueryBuilder For<T>() => new SelectQueryBuilder<T>();
-    private List<string> _fields = new List<string>();
+    private List<SelectionField> _fields = new List<SelectionField>();
     private List<JoinClause> _joins = new List<JoinClause>();
     private List<WhereCondition> _whereConditions = new List<WhereCondition>();
     private List<string> _orderBys = new List<string>();
@@ -22,7 +22,7 @@ public class SelectQueryBuilder
 
     private static readonly HashSet<string> _allowedOperators = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
-        "=", "<>", "!=", "<", "<=", ">", ">=", "LIKE", "NOT LIKE", "IN", "NOT IN", "IS NULL", "IS NOT NULL", "BETWEEN", "REGEXP", "NOT REGEXP"
+        "=", "<>", "!=", "<", "<=", ">", ">=", "LIKE", "NOT LIKE", "IN", "NOT IN", "IS NULL", "IS NOT NULL", "BETWEEN", "REGEXP", "NOT REGEXP", "RAW"
     };
 
     private string EscapeIdentifier(string identifier)
@@ -50,7 +50,21 @@ public class SelectQueryBuilder
 
     public SelectQueryBuilder Select(params string[] fields)
     {
-        _fields.AddRange(fields.Select(ResolveField));
+        _fields.AddRange(fields.Select(f => new SelectionField { Name = ResolveField(f), IsRaw = false }));
+        return this;
+    }
+
+    public SelectQueryBuilder SelectRaw(string sql)
+    {
+        _fields.Add(new SelectionField { Name = sql, IsRaw = true });
+        return this;
+    }
+
+    public SelectQueryBuilder Count(string field = "*")
+    {
+        _fields.Clear();
+        string countField = field == "*" ? "*" : EscapeIdentifier(ResolveField(field));
+        _fields.Add(new SelectionField { Name = $"COUNT({countField})", IsRaw = true });
         return this;
     }
 
@@ -85,10 +99,22 @@ public class SelectQueryBuilder
         return this;
     }
 
+    public SelectQueryBuilder WhereRaw(string sql, params object[] parameters)
+    {
+        _whereConditions.Add(new WhereCondition { RawSql = sql, RawParameters = parameters, Operator = "RAW", Logic = "AND" });
+        return this;
+    }
+
     public SelectQueryBuilder OrWhere(string field, object value, string op = "=")
     {
         ValidateOperator(op);
         _whereConditions.Add(new WhereCondition { Field = ResolveField(field), Value = value, Operator = op, Logic = "OR" });
+        return this;
+    }
+
+    public SelectQueryBuilder OrWhereRaw(string sql, params object[] parameters)
+    {
+        _whereConditions.Add(new WhereCondition { RawSql = sql, RawParameters = parameters, Operator = "RAW", Logic = "OR" });
         return this;
     }
 
@@ -148,7 +174,9 @@ public class SelectQueryBuilder
             throw new InvalidOperationException("Nome da tabela não definido");
 
         var command = new MySqlCommand();
-        var selection = _fields.Count > 0 ? string.Join(", ", _fields.Select(f => EscapeIdentifier(f))) : "*";
+        var selection = _fields.Count > 0 
+            ? string.Join(", ", _fields.Select(f => f.IsRaw ? f.Name : EscapeIdentifier(f.Name))) 
+            : "*";
         
         var sql = $"SELECT {selection} FROM {EscapeIdentifier(_tableName)}";
 
@@ -206,6 +234,20 @@ public class SelectQueryBuilder
 
     private string BuildWhereClause(WhereCondition condition, MySqlCommand command)
     {
+        if (condition.Operator == "RAW")
+        {
+            string sql = condition.RawSql;
+            if (condition.RawParameters != null)
+            {
+                foreach (var param in condition.RawParameters)
+                {
+                    var pName = GetNextParamName();
+                    command.Parameters.AddWithValue($"@{pName}", param ?? DBNull.Value);
+                }
+            }
+            return sql;
+        }
+
         switch (condition.Operator)
         {
             case "IS NULL":
@@ -239,6 +281,12 @@ public class SelectQueryBuilder
 
     private string GetNextParamName() => $"p{_paramCounter++}";
 
+    private class SelectionField
+    {
+        public string Name { get; set; }
+        public bool IsRaw { get; set; }
+    }
+
     private class JoinClause
     {
         public string Table { get; set; }
@@ -256,9 +304,12 @@ public class SelectQueryBuilder
         public List<object> Values { get; set; }
         public string Operator { get; set; }
         public string Logic { get; set; }
+        public string RawSql { get; set; }
+        public object[] RawParameters { get; set; }
     }
 
     protected virtual string ResolveField(string field) => field;
+
 }
 
 public class SelectQueryBuilder<T> : SelectQueryBuilder
@@ -271,7 +322,7 @@ public class SelectQueryBuilder<T> : SelectQueryBuilder
         foreach (var p in typeof(T).GetProperties())
         {
             var attr = p.GetCustomAttribute<DbFieldAttribute>(true);
-            var columnName = attr?.Name ?? p.Name;
+            var columnName = attr?.Name ?? p.Name.ToSnakeCase();
             
             mapping[p.Name] = columnName;
             mapping[p.Name.ToSnakeCase()] = columnName;
@@ -316,5 +367,23 @@ public class SelectQueryExecutor
         command.Connection = _connection;
         if (_transaction != null) command.Transaction = _transaction;
         return new MySQLReader(command.ExecuteReader());
+    }
+
+    public async Task<long> ExecuteCountAsync(SelectQueryBuilder builder)
+    {
+        var (_, command) = builder.Build();
+        command.Connection = _connection;
+        if (_transaction != null) command.Transaction = _transaction;
+        var result = await command.ExecuteScalarAsync();
+        return Convert.ToInt64(result);
+    }
+
+    public long ExecuteCountSync(SelectQueryBuilder builder)
+    {
+        var (_, command) = builder.Build();
+        command.Connection = _connection;
+        if (_transaction != null) command.Transaction = _transaction;
+        var result = command.ExecuteScalar();
+        return Convert.ToInt64(result);
     }
 }

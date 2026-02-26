@@ -151,6 +151,71 @@ public class QueryBuilderTests
     }
 
     [Fact]
+    public void TestSelectRawWithAlias()
+    {
+        var builder = new SelectQueryBuilder()
+            .SelectRaw("AES_DECRYPT(nome, 'key') AS nome_decrypted")
+            .From("usuarios");
+
+        var (sql, _) = builder.Build();
+
+        Assert.Contains("AES_DECRYPT(nome, 'key') AS nome_decrypted", sql);
+        Assert.DoesNotContain("`AES_DECRYPT", sql);
+    }
+
+    [Fact]
+    public void TestWhereRawWithFunction()
+    {
+        var builder = new SelectQueryBuilder()
+            .Table("usuarios")
+            .WhereRaw("nome = AES_ENCRYPT(@p0, 'key')", "Joao");
+
+        var (sql, command) = builder.Build();
+
+        Assert.Contains("WHERE nome = AES_ENCRYPT(@p0, 'key')", sql);
+        Assert.Single(command.Parameters);
+        Assert.Equal("Joao", command.Parameters["@p0"].Value);
+    }
+
+    [Fact]
+    public void TestSelectMixedNormalAndRaw()
+    {
+        var builder = new SelectQueryBuilder()
+            .Select("id")
+            .SelectRaw("COUNT(*) as total")
+            .From("usuarios")
+            .OrderBy("id");
+
+        var (sql, _) = builder.Build();
+
+        Assert.Contains("SELECT `id`, COUNT(*) as total FROM `usuarios`", sql);
+    }
+
+    [Fact]
+    public void TestCountQuery()
+    {
+        var builder = new SelectQueryBuilder()
+            .Table("users")
+            .Count();
+
+        var (sql, _) = builder.Build();
+
+        Assert.Equal("SELECT COUNT(*) FROM `users`", sql);
+    }
+
+    [Fact]
+    public void TestCountWithColumn()
+    {
+        var builder = new SelectQueryBuilder()
+            .Table("users")
+            .Count("id");
+
+        var (sql, _) = builder.Build();
+
+        Assert.Equal("SELECT COUNT(`id`) FROM `users`", sql);
+    }
+
+    [Fact]
     public void TestInsertToString()
     {
         var builder = new InsertQueryBuilder()

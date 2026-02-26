@@ -16,6 +16,17 @@ namespace Jovemnf.MySQL
     public class MySQLReader : IDisposable, IAsyncDisposable
     {
         private DbDataReader dr;
+        private readonly Dictionary<string, int> _ordinalCache = new(StringComparer.OrdinalIgnoreCase);
+
+        private int GetOrdinal(string columnName)
+        {
+            if (_ordinalCache.TryGetValue(columnName, out int ordinal))
+                return ordinal;
+
+            ordinal = dr.GetOrdinal(columnName);
+            _ordinalCache[columnName] = ordinal;
+            return ordinal;
+        }
 
         public MySQLReader(DbDataReader _dr)
         {
@@ -44,7 +55,7 @@ namespace Jovemnf.MySQL
 
             try
             {
-                dr.GetOrdinal(columnName);
+                GetOrdinal(columnName);
                 return true;
             }
             catch
@@ -65,7 +76,7 @@ namespace Jovemnf.MySQL
 
             try
             {
-                int ordinal = dr.GetOrdinal(column);
+                int ordinal = GetOrdinal(column);
                 return dr.IsDBNull(ordinal);
             }
             catch
@@ -186,7 +197,7 @@ namespace Jovemnf.MySQL
 
             try
             {
-                int ordinal = dr.GetOrdinal(column);
+                int ordinal = GetOrdinal(column);
                 return dr.IsDBNull(ordinal) ? null : dr.GetValue(ordinal);
             }
             catch (Exception ex)
@@ -253,7 +264,7 @@ namespace Jovemnf.MySQL
 
             try
             {
-                int ordinal = dr.GetOrdinal(column);
+                int ordinal = GetOrdinal(column);
                 if (dr.IsDBNull(ordinal))
                     throw new InvalidOperationException($"A coluna '{column}' contém um valor NULL.");
 
@@ -277,7 +288,7 @@ namespace Jovemnf.MySQL
 
             try
             {
-                int ordinal = dr.GetOrdinal(column);
+                int ordinal = GetOrdinal(column);
                 if (dr.IsDBNull(ordinal))
                     return null;
 
@@ -326,7 +337,7 @@ namespace Jovemnf.MySQL
 
             try
             {
-                int ordinal = dr.GetOrdinal(column);
+                int ordinal = GetOrdinal(column);
                 if (dr.IsDBNull(ordinal))
                     return @default;
 
@@ -350,7 +361,7 @@ namespace Jovemnf.MySQL
 
             try
             {
-                int ordinal = dr.GetOrdinal(column);
+                int ordinal = GetOrdinal(column);
                 if (dr.IsDBNull(ordinal))
                     return null;
 
@@ -375,7 +386,7 @@ namespace Jovemnf.MySQL
 
             try
             {
-                int ordinal = dr.GetOrdinal(column);
+                int ordinal = GetOrdinal(column);
                 if (dr.IsDBNull(ordinal))
                     return @default;
 
@@ -399,7 +410,7 @@ namespace Jovemnf.MySQL
 
             try
             {
-                int ordinal = dr.GetOrdinal(column);
+                int ordinal = GetOrdinal(column);
                 if (dr.IsDBNull(ordinal))
                     return null;
 
@@ -436,7 +447,7 @@ namespace Jovemnf.MySQL
 
             try
             {
-                int ordinal = dr.GetOrdinal(column);
+                int ordinal = GetOrdinal(column);
                 if (dr.IsDBNull(ordinal))
                     return @default;
 
@@ -484,7 +495,7 @@ namespace Jovemnf.MySQL
 
             try
             {
-                int ordinal = dr.GetOrdinal(column);
+                int ordinal = GetOrdinal(column);
                 if (dr.IsDBNull(ordinal))
                     return null;
 
@@ -509,7 +520,7 @@ namespace Jovemnf.MySQL
 
             try
             {
-                int ordinal = dr.GetOrdinal(column);
+                int ordinal = GetOrdinal(column);
                 if (dr.IsDBNull(ordinal))
                     return @default;
 
@@ -557,7 +568,7 @@ namespace Jovemnf.MySQL
 
             try
             {
-                int ordinal = dr.GetOrdinal(column);
+                int ordinal = GetOrdinal(column);
                 if (dr.IsDBNull(ordinal))
                     return null;
 
@@ -582,7 +593,7 @@ namespace Jovemnf.MySQL
 
             try
             {
-                int ordinal = this.dr.GetOrdinal(column);
+                int ordinal = GetOrdinal(column);
                 if (this.dr.IsDBNull(ordinal))
                 {
                     return vdefault;
@@ -795,13 +806,11 @@ namespace Jovemnf.MySQL
                         {
                             Type propType = Nullable.GetUnderlyingType(prop.PropertyType) ?? prop.PropertyType;
                             
-                            if (propType == typeof(bool))
+                            object convertedValue = TryParse.ChangeType(val, propType);
+                            
+                            if (convertedValue != null)
                             {
-                                prop.SetValue(model, TryParse.ToBoolean(val));
-                            }
-                            else if (propType == typeof(DateTime))
-                            {
-                                prop.SetValue(model, Convert.ToDateTime(val));
+                                prop.SetValue(model, convertedValue);
                             }
                             else if (propType.IsEnum)
                             {
@@ -833,12 +842,8 @@ namespace Jovemnf.MySQL
                                         var deserializedValue = JsonSerializer.Deserialize(jsonString, propType, options);
                                         prop.SetValue(model, deserializedValue);
                                     }
-                                    else
-                                    {
-                                        prop.SetValue(model, Convert.ChangeType(val, propType));
-                                    }
                                 }
-                                catch (Exception ex)
+                                catch (Exception)
                                 {
                                     // If JSON deserialization fails, try standard conversion
                                     try
@@ -978,7 +983,7 @@ namespace Jovemnf.MySQL
 
     public class MySQLArrayReader
     {
-        public Dictionary<string, object> List = new Dictionary<string, object>();
+        private readonly Dictionary<string, object> List = new();
 
         public MySQLArrayReader(DbDataReader dr)
         {

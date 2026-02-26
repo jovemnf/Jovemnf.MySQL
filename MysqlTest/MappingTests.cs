@@ -96,6 +96,40 @@ public class MappingTests
         Assert.Equal(30, model.Id);
         Assert.Equal("Attribute User", model.Name);
     }
+
+    [Fact]
+    public void TestToModel_NumericMapping()
+    {
+        var guid = Guid.NewGuid();
+        var data = new List<Dictionary<string, object>>
+        {
+            new Dictionary<string, object>
+            {
+                { "IntVal", 123 },
+                { "LongVal", 1234567890L },
+                { "FloatVal", 123.45f },
+                { "DoubleVal", 678.90 },
+                { "DecimalVal", 1000.50m },
+                { "ShortVal", (short)10 },
+                { "ByteVal", (byte)255 },
+                { "GuidVal", guid.ToString() }
+            }
+        };
+
+        using var reader = new MySQLReader(new FakeDataReader(data));
+        reader.Read();
+        
+        var model = reader.ToModel<NumericTestModel>();
+
+        Assert.Equal(123, model.IntVal);
+        Assert.Equal(1234567890L, model.LongVal);
+        Assert.Equal(123.45f, model.FloatVal);
+        Assert.Equal(678.90, model.DoubleVal);
+        Assert.Equal(1000.50m, model.DecimalVal);
+        Assert.Equal(10, model.ShortVal);
+        Assert.Equal(255, model.ByteVal);
+        Assert.Equal(guid, model.GuidVal);
+    }
 }
 
 public class ModelWithAttributes
@@ -105,4 +139,47 @@ public class ModelWithAttributes
 
     [DbField("fullname")]
     public string Name { get; set; }
+}
+
+public class NumericTestModel
+{
+    public int IntVal { get; set; }
+    public long LongVal { get; set; }
+    public float FloatVal { get; set; }
+    public double DoubleVal { get; set; }
+    public decimal DecimalVal { get; set; }
+    public short ShortVal { get; set; }
+    public byte ByteVal { get; set; }
+    public Guid GuidVal { get; set; }
+}
+
+public class Boleto
+{
+    public int Id { get; set; }
+    public int IdEmpresa { get; set; }
+    public string Descricao { get; set; }
+}
+
+public class QueryBuilderMappingTests
+{
+    [Fact]
+    public void TestSelectQueryBuilder_ResolvesPascalCaseToSnakeCase()
+    {
+        var sql = Jovemnf.MySQL.Builder.SelectQueryBuilder.For<Boleto>()
+            .Where("IdEmpresa", 123)
+            .ToString();
+
+        // Should use id_empresa, not IdEmpresa or Id_Empresa
+        Assert.Contains("`id_empresa` =", sql);
+    }
+    
+    [Fact]
+    public void TestSelectQueryBuilder_ResolvesSnakeCaseInputCorrectly()
+    {
+        var sql = Jovemnf.MySQL.Builder.SelectQueryBuilder.For<Boleto>()
+            .Where("id_empresa", 123)
+            .ToString();
+
+        Assert.Contains("`id_empresa` =", sql);
+    }
 }

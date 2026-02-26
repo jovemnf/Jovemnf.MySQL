@@ -417,7 +417,7 @@ namespace Jovemnf.MySQL.Builder
             foreach (var p in typeof(T).GetProperties())
             {
                 var attr = p.GetCustomAttribute<DbFieldAttribute>(true);
-                var columnName = attr?.Name ?? p.Name;
+                var columnName = attr?.Name ?? p.Name.ToSnakeCase();
                 
                 mapping[p.Name] = columnName;
                 mapping[p.Name.ToSnakeCase()] = columnName;
