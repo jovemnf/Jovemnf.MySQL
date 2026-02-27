@@ -391,28 +391,7 @@ namespace Jovemnf.MySQL
             }
         }
 
-        public async Task<int> ExecuteInsertAsync(bool lastID = true)
-        {
-            try
-            {
-                if (cmd == null)
-                {
-                    throw new InvalidOperationException("Comando não foi inicializado. Chame OpenCommand primeiro.");
-                }
-                await cmd.ExecuteNonQueryAsync();
-                if (lastID)
-                {
-                    return await LastIdAsync();
-                }
-                return 0;
-            }
-            catch
-            {
-                throw;
-            }
-        }
-
-        public async Task<long> ExecuteInsertAsyncLong(bool lastID = true)
+        public async Task<long> ExecuteInsertAsync(bool lastID = true)
         {
             try
             {
@@ -450,7 +429,7 @@ namespace Jovemnf.MySQL
             return 0;
         }
 
-        public int ExecuteInsertSync(bool lastID = true)
+        public long ExecuteInsertSync(bool lastID = true)
         {
             try
             {
