@@ -15,16 +15,16 @@ public class PayloadForSerialization
 
 public class AddressForSerialization
 {
-    public string Street { get; set; }
-    public string City { get; set; }
-    public string ZipCode { get; set; }
+    public string Street { get; set; } = null!;
+    public string City { get; set; } = null!;
+    public string ZipCode { get; set; } = null!;
 }
 
 public class NestedObjectForSerialization
 {
     public int Id { get; set; }
-    public string Name { get; set; }
-    public AddressForSerialization Address { get; set; }
+    public string Name { get; set; } = null!;
+    public AddressForSerialization Address { get; set; } = null!;
 }
 
 public class JsonSerializationBuilderTests
@@ -57,7 +57,7 @@ public class JsonSerializationBuilderTests
         var payloadParam = command.Parameters["@p1"];
         Assert.NotNull(payloadParam);
         
-        var jsonString = payloadParam.Value.ToString();
+        var jsonString = payloadParam.Value!.ToString()!;
         Assert.Contains("\"Lat\"", jsonString);
         Assert.Contains("-23.551", jsonString);
         Assert.Contains("\"Lng\"", jsonString);
@@ -109,7 +109,7 @@ public class JsonSerializationBuilderTests
         var payloadParam = command.Parameters["@p0"];
         Assert.NotNull(payloadParam);
         
-        var jsonString = payloadParam.Value.ToString();
+        var jsonString = payloadParam.Value!.ToString()!;
         // With camelCase policy, properties should be lowercase
         Assert.Contains("\"lat\"", jsonString);
         Assert.Contains("\"lng\"", jsonString);
@@ -143,7 +143,7 @@ public class JsonSerializationBuilderTests
         var payloadParam = command.Parameters["@p0"];
         Assert.NotNull(payloadParam);
         
-        var jsonString = payloadParam.Value.ToString();
+        var jsonString = payloadParam.Value!.ToString()!;
         Assert.Contains("\"Lat\"", jsonString);
         Assert.Contains("-22.123", jsonString);
         Assert.Contains("\"Lng\"", jsonString);
@@ -178,7 +178,7 @@ public class JsonSerializationBuilderTests
         var dataParam = command.Parameters["@p0"];
         Assert.NotNull(dataParam);
         
-        var jsonString = dataParam.Value.ToString();
+        var jsonString = dataParam.Value!.ToString()!;
         Assert.Contains("\"Id\"", jsonString);
         Assert.Contains("\"Name\"", jsonString);
         Assert.Contains("\"Address\"", jsonString);
@@ -188,7 +188,8 @@ public class JsonSerializationBuilderTests
         Assert.Contains("01234-567", jsonString);
         // Verify it's valid JSON by deserializing (handles Unicode automatically)
         var deserialized = JsonSerializer.Deserialize<NestedObjectForSerialization>(jsonString);
-        Assert.Equal(10, deserialized.Id);
+        Assert.NotNull(deserialized);
+        Assert.Equal(10, deserialized!.Id);
         Assert.Equal("Test User", deserialized.Name);
         Assert.Equal("São Paulo", deserialized.Address.City);
     }
@@ -243,7 +244,7 @@ public class JsonSerializationBuilderTests
         
         // Verify payload is JSON
         var payloadParam = command.Parameters["@p2"];
-        var jsonString = payloadParam.Value.ToString();
+        var jsonString = payloadParam.Value!.ToString()!;
         Assert.Contains("\"Lat\"", jsonString);
     }
 
@@ -275,7 +276,7 @@ public class JsonSerializationBuilderTests
         
         // Verify payload is JSON
         var payloadParam = command.Parameters["@p1"];
-        var jsonString = payloadParam.Value.ToString();
+        var jsonString = payloadParam.Value!.ToString()!;
         Assert.Contains("\"Lat\"", jsonString);
         Assert.Contains("-22", jsonString);
     }
@@ -301,7 +302,7 @@ public class JsonSerializationBuilderTests
         var coordinatesParam = command.Parameters["@p0"];
         Assert.NotNull(coordinatesParam);
         
-        var jsonString = coordinatesParam.Value.ToString();
+        var jsonString = coordinatesParam.Value!.ToString()!;
         Assert.StartsWith("[", jsonString);
         Assert.EndsWith("]", jsonString);
         Assert.Contains("\"Lat\"", jsonString);

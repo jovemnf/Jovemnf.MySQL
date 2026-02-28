@@ -9,7 +9,7 @@ namespace MysqlTest;
 public class TestModel
 {
     public int Id { get; set; }
-    public string Nome { get; set; }
+    public string Nome { get; set; } = null!;
     public bool Ativo { get; set; }
     public double Salario { get; set; }
     public DateTime DataNascimento { get; set; }
@@ -30,7 +30,7 @@ public class MappingTests
                 { "Ativo", true },
                 { "Salario", 1500.50 },
                 { "DataNascimento", new DateTime(2000, 1, 1) },
-                { "NullableInt", null }
+                { "NullableInt", null! }
             }
         };
 
@@ -138,7 +138,7 @@ public class ModelWithAttributes
     public int Id { get; set; }
 
     [DbField("fullname")]
-    public string Name { get; set; }
+    public string Name { get; set; } = null!;
 }
 
 public class NumericTestModel
@@ -157,7 +157,7 @@ public class Boleto
 {
     public int Id { get; set; }
     public int IdEmpresa { get; set; }
-    public string Descricao { get; set; }
+    public string Descricao { get; set; } = null!;
 }
 
 public class QueryBuilderMappingTests

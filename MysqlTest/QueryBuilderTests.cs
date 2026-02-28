@@ -91,7 +91,7 @@ public class QueryBuilderTests
             {"nome", "Joao"},
             {"idade", 30},
             {"nascimento", new DateTime(1990, 1, 1)},
-            {"observacao", (object?)null}
+            {"observacao", null!}
         };
         
         var builder = new InsertQueryBuilder().Table("clientes").Values(values);

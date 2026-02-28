@@ -234,9 +234,30 @@ public class InsertQueryBuilder<T> : InsertQueryBuilder
         Table(GetTableName<T>());
     }
 
+    public InsertQueryBuilder<T> ValuesFrom(T entity)
+    {
+        if (entity == null) throw new ArgumentNullException(nameof(entity));
+
+        foreach (var p in typeof(T).GetProperties())
+        {
+            if (p.GetCustomAttribute<IgnoreToDictionaryAttribute>(true) != null)
+                continue;
+
+            var value = p.GetValue(entity);
+            if (value == null) continue;
+
+            var columnName = _fieldMapping.TryGetValue(p.Name, out var col) ? col : p.Name;
+            Value(columnName, value);
+        }
+        return this;
+    }
+
     protected override string ResolveField(string field)
     {
-        return _fieldMapping.TryGetValue(field, out var column) ? column : field;
+        if (_fieldMapping.TryGetValue(field, out var columnName))
+            return columnName;
+            
+        return field.ToSnakeCase();
     }
 }
 

@@ -347,6 +347,6 @@ public class GeometryPointTests
 public class LocationModel
 {
     public int Id { get; set; }
-    public string Name { get; set; }
-    public Point Coordinates { get; set; }
+    public string Name { get; set; } = null!;
+    public Point Coordinates { get; set; } = null!;
 }

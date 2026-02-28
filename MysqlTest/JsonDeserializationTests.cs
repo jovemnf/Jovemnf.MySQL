@@ -17,26 +17,26 @@ public class Payload
 public class Telemetria
 {
     public int Id { get; set; }
-    public Payload Payload { get; set; }
+    public Payload? Payload { get; set; }
 }
 
 public class Address
 {
-    public string Street { get; set; }
-    public string City { get; set; }
-    public string ZipCode { get; set; }
+    public string Street { get; set; } = null!;
+    public string City { get; set; } = null!;
+    public string ZipCode { get; set; } = null!;
 }
 
 public class Person
 {
     public int Id { get; set; }
-    public string Name { get; set; }
-    public Address Address { get; set; }
+    public string Name { get; set; } = null!;
+    public Address Address { get; set; } = null!;
 }
 
 public class OrderItem
 {
-    public string ProductName { get; set; }
+    public string ProductName { get; set; } = null!;
     public int Quantity { get; set; }
     public decimal Price { get; set; }
 }
@@ -44,21 +44,21 @@ public class OrderItem
 public class Order
 {
     public int Id { get; set; }
-    public List<OrderItem> Items { get; set; }
+    public List<OrderItem> Items { get; set; } = null!;
 }
 
 public class EventModel
 {
     public int Id { get; set; }
-    public MyDate EventDate { get; set; }
-    public MyDateTime CreatedAt { get; set; }
+    public MyDate EventDate { get; set; } = null!;
+    public MyDateTime CreatedAt { get; set; } = null!;
 }
 
 public class MixedModel
 {
     public int Id { get; set; }
-    public string Name { get; set; }
-    public Payload Location { get; set; }
+    public string Name { get; set; } = null!;
+    public Payload Location { get; set; } = null!;
     public DateTime CreatedAt { get; set; }
 }
 
@@ -85,8 +85,8 @@ public class JsonDeserializationTests
         // Assert
         Assert.Equal(1, model.Id);
         Assert.NotNull(model.Payload);
-        Assert.Equal(-23.551, model.Payload.Lat);
-        Assert.Equal(-46.633, model.Payload.Lng);
+        Assert.Equal(-23.551, model.Payload!.Lat);
+        Assert.Equal(-46.633, model.Payload!.Lng);
     }
 
     [Fact]
@@ -110,8 +110,8 @@ public class JsonDeserializationTests
         // Assert
         Assert.Equal(1, model.Id);
         Assert.NotNull(model.Payload);
-        Assert.Equal(-23.551, model.Payload.Lat);
-        Assert.Equal(-46.633, model.Payload.Lng);
+        Assert.Equal(-23.551, model.Payload!.Lat);
+        Assert.Equal(-46.633, model.Payload!.Lng);
         // Extra properties (ign, sat, attrs, speed) are ignored - this is the key test!
     }
 
@@ -136,8 +136,8 @@ public class JsonDeserializationTests
         // Assert - Should map despite case difference
         Assert.Equal(2, model.Id);
         Assert.NotNull(model.Payload);
-        Assert.Equal(-22.123, model.Payload.Lat);  // Lat in C# class
-        Assert.Equal(-45.456, model.Payload.Lng);  // Lng in C# class
+        Assert.Equal(-22.123, model.Payload!.Lat);  // Lat in C# class
+        Assert.Equal(-45.456, model.Payload!.Lng);  // Lng in C# class
     }
 
     [Fact]
@@ -163,9 +163,9 @@ public class JsonDeserializationTests
         Assert.Equal(10, model.Id);
         Assert.Equal("John Doe", model.Name);
         Assert.NotNull(model.Address);
-        Assert.Equal("123 Main St", model.Address.Street);
-        Assert.Equal("São Paulo", model.Address.City);
-        Assert.Equal("01234-567", model.Address.ZipCode);
+        Assert.Equal("123 Main St", model.Address!.Street);
+        Assert.Equal("São Paulo", model.Address!.City);
+        Assert.Equal("01234-567", model.Address!.ZipCode);
     }
 
     [Fact]

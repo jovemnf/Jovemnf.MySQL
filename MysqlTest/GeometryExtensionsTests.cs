@@ -339,7 +339,7 @@ public class GeometryExtensionsTests
     public void TestGetCenter_NullPolygon()
     {
         // Arrange
-        Polygon polygon = null;
+        Polygon? polygon = null;
 
         // Act
         var center = polygon.GetCenter();

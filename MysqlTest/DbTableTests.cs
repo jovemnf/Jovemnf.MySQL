@@ -8,13 +8,13 @@ namespace MysqlTest;
 public class TestModelWithAttribute
 {
     public int Id { get; set; }
-    public string Name { get; set; }
+    public string Name { get; set; } = null!;
 }
 
 public class TestModelWithoutAttribute
 {
     public int Id { get; set; }
-    public string Name { get; set; }
+    public string Name { get; set; } = null!;
 }
 
 public class DbTableTests
@@ -124,5 +124,5 @@ public class DbTableTests
 public class TestModelWithDbField
 {
     [DbField("real_column")]
-    public string PropertyName { get; set; }
+    public string PropertyName { get; set; } = null!;
 }

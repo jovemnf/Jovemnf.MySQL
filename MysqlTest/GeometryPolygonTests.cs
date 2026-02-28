@@ -446,6 +446,6 @@ public class GeometryPolygonTests
 public class ZoneModel
 {
     public int Id { get; set; }
-    public string Name { get; set; }
-    public Polygon Area { get; set; }
+    public string Name { get; set; } = null!;
+    public Polygon Area { get; set; } = null!;
 }

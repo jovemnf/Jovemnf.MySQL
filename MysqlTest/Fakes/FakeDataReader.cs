@@ -27,7 +27,7 @@ public class FakeDataReader : DbDataReader
     public override object GetValue(int ordinal)
     {
         string columnName = GetName(ordinal);
-        return _rows[_currentIndex][columnName];
+        return _rows[_currentIndex][columnName]!;
     }
 
     public override int GetValues(object[] values)
@@ -60,7 +60,7 @@ public class FakeDataReader : DbDataReader
     }
 
     public override object this[int ordinal] => GetValue(ordinal);
-    public override object this[string name] => _rows[_currentIndex][name];
+    public override object this[string name] => _rows[_currentIndex][name]!;
     public override int FieldCount => _rows.Count > 0 ? _rows[0].Count : 0;
     public override bool HasRows => _rows.Count > 0;
     public override int Depth => 0;

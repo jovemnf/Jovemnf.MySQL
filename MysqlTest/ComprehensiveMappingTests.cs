@@ -12,10 +12,10 @@ public class TestUser
     public int Id { get; set; }
 
     [DbField("full_name")]
-    public string Name { get; set; }
+    public string Name { get; set; } = null!;
 
     [DbField("user_email")]
-    public string Email { get; set; }
+    public string Email { get; set; } = null!;
 }
 
 public class ComprehensiveMappingTests
