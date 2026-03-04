@@ -95,6 +95,27 @@ namespace Jovemnf.MySQL
             return Guid.Empty;
         }
 
+        public static TimeSpan ToTimeSpan(object value)
+        {
+            if (value == null || value == DBNull.Value)
+                return TimeSpan.Zero;
+
+            if (value is TimeSpan ts)
+                return ts;
+
+            if (value is string str && TimeSpan.TryParse(str, CultureInfo.InvariantCulture, out TimeSpan parsed))
+                return parsed;
+
+            try
+            {
+                return (TimeSpan)Convert.ChangeType(value, typeof(TimeSpan), CultureInfo.InvariantCulture);
+            }
+            catch
+            {
+                return TimeSpan.Zero;
+            }
+        }
+
         public static object ChangeType(object value, Type targetType)
         {
             if (value == null || value == DBNull.Value)
@@ -111,6 +132,7 @@ namespace Jovemnf.MySQL
             if (targetType == typeof(Guid)) return ToGuid(value);
             if (targetType == typeof(string)) return value.ToString();
             if (targetType == typeof(DateTime)) return Convert.ToDateTime(value);
+            if (targetType == typeof(TimeSpan)) return ToTimeSpan(value);
 
             try
             {

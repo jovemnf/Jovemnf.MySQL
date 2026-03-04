@@ -52,14 +52,12 @@ public class ExecuteInsertTests
         Assert.Contains("`created_at`", cmd.CommandText);
         
         // Find parameter for Name
-        bool foundName = false;
+        var foundName = false;
         foreach (MySqlParameter param in cmd.Parameters)
         {
-            if (param.Value?.ToString() == "Test")
-            {
-                foundName = true;
-                break;
-            }
+            if (param.Value?.ToString() != "Test") continue;
+            foundName = true;
+            break;
         }
         Assert.True(foundName, "Parameter with value 'Test' not found");
     }

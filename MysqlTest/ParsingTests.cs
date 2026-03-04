@@ -52,4 +52,14 @@ public class ParsingTests
         Assert.Equal(0, TryParse.ToInt32(null));
         Assert.Equal(0, TryParse.ToInt32("invalid"));
     }
+
+    [Fact]
+    public void TestToTimeSpan()
+    {
+        Assert.Equal(TimeSpan.Zero, TryParse.ToTimeSpan(null));
+        Assert.Equal(TimeSpan.Zero, TryParse.ToTimeSpan(DBNull.Value));
+        Assert.Equal(new TimeSpan(2, 30, 0), TryParse.ToTimeSpan(new TimeSpan(2, 30, 0)));
+        Assert.Equal(new TimeSpan(1, 15, 30), TryParse.ToTimeSpan("01:15:30"));
+        Assert.Equal(new TimeSpan(0, 0, 0), TryParse.ToTimeSpan("invalid"));
+    }
 }
