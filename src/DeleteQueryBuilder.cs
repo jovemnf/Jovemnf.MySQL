@@ -39,6 +39,61 @@ namespace Jovemnf.MySQL.Builder
             return this;
         }
         
+        public Task ExecuteAsync(MySQL connection)
+        {
+            ArgumentNullException.ThrowIfNull(connection);
+            if (_tableName == null) 
+                throw new InvalidOperationException("Tabela não especificada");
+            return connection.ExecuteDeleteAsync(this);
+        }
+
+        /// <summary>
+        /// Executa o DELETE e retorna as linhas que foram removidas mapeadas para o tipo T (SELECT antes do DELETE).
+        /// Não suportado quando All() foi usado; nesse caso use ExecuteAsync(connection).
+        /// </summary>
+        /// <typeparam name="T">Tipo do modelo (deve ter construtor sem parâmetros e propriedades mapeáveis).</typeparam>
+        /// <param name="connection">Conexão MySQL.</param>
+        /// <returns>Lista das entidades que foram deletadas.</returns>
+        public Task<List<T>> ExecuteAsync<T>(MySQL connection) where T : new()
+        {
+            ArgumentNullException.ThrowIfNull(connection);
+            if (_tableName == null) 
+                throw new InvalidOperationException("Tabela não especificada");
+            return connection.ExecuteDeleteAsync<T>(this);
+        }
+
+        /// <summary>
+        /// Constrói um SELECT * para as mesmas condições WHERE do DELETE (usado por ExecuteAsync&lt;T&gt;).
+        /// </summary>
+        internal (string Sql, MySqlCommand Command) BuildSelect()
+        {
+            if (_whereConditions.Count == 0 && !_allowAll)
+                throw new InvalidOperationException("Nenhuma condição WHERE definida para SELECT.");
+            if (_allowAll)
+                throw new InvalidOperationException("ExecuteAsync<T> não é suportado quando All() foi usado. Use ExecuteAsync(connection).");
+
+            var command = new MySqlCommand();
+            var savedCounter = _paramCounter;
+            _paramCounter = 0;
+
+            var whereClauses = new List<string>();
+            for (int i = 0; i < _whereConditions.Count; i++)
+            {
+                var condition = _whereConditions[i];
+                var logic = i > 0 ? condition.Logic : "";
+                string clause = BuildWhereClause(condition, command);
+                if (i > 0)
+                    whereClauses.Add($"{logic} {clause}");
+                else
+                    whereClauses.Add(clause);
+            }
+
+            var sql = $"SELECT * FROM `{EscapeIdentifier(_tableName)}` WHERE {string.Join(" ", whereClauses)}";
+            command.CommandText = sql;
+            _paramCounter = savedCounter;
+            return (sql, command);
+        }
+
         public DeleteQueryBuilder From(string tableName) => Table(tableName);
 
         public DeleteQueryBuilder Where(string field, object value, string op = "=")

@@ -49,6 +49,49 @@ public class InsertQueryBuilder
         }
         return this;
     }
+    
+    public Task ExecuteAsync(MySQL connection)
+    {
+        ArgumentNullException.ThrowIfNull(connection);
+        if (_tableName == null) 
+            throw new InvalidOperationException("Tabela não especificada");
+        if (_fields.Count == 0) 
+            throw new InvalidOperationException("Nenhum campo para inserir");
+
+        return connection.ExecuteInsertAsync(this);
+    }
+
+    /// <summary>
+    /// Executa o INSERT e retorna a linha inserida mapeada para o tipo T (via LAST_INSERT_ID + SELECT).
+    /// Assume que a tabela possui coluna de chave primária "id" auto-incremento.
+    /// </summary>
+    /// <typeparam name="T">Tipo do modelo (deve ter construtor sem parâmetros e propriedades mapeáveis).</typeparam>
+    /// <param name="connection">Conexão MySQL.</param>
+    /// <returns>A entidade inserida com dados do banco (incluindo id gerado) ou default se falhar.</returns>
+    public Task<T> ExecuteAsync<T>(MySQL connection) where T : new()
+    {
+        ArgumentNullException.ThrowIfNull(connection);
+        if (_tableName == null) 
+            throw new InvalidOperationException("Tabela não especificada");
+        if (_fields.Count == 0) 
+            throw new InvalidOperationException("Nenhum campo para inserir");
+
+        return connection.ExecuteInsertAsync<T>(this);
+    }
+
+    /// <summary>
+    /// Constrói SELECT * para a linha inserida por id (usado por ExecuteAsync&lt;T&gt;).
+    /// </summary>
+    internal (string Sql, MySqlCommand Command) BuildSelectById(long id)
+    {
+        if (string.IsNullOrEmpty(_tableName))
+            throw new InvalidOperationException("Tabela não especificada");
+        var command = new MySqlCommand();
+        command.Parameters.AddWithValue("@p0", id);
+        var sql = $"SELECT * FROM `{EscapeIdentifier(_tableName)}` WHERE `id` = @p0";
+        command.CommandText = sql;
+        return (sql, command);
+    }
 
     public InsertQueryBuilder Values(Dictionary<string, object> fields)
     {

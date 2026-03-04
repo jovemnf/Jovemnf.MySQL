@@ -42,6 +42,34 @@ namespace Jovemnf.MySQL.Builder
             return this;
         }
 
+        public Task<int> ExecuteAsync(MySQL connection)
+        {
+            ArgumentNullException.ThrowIfNull(connection);
+            if (_tableName == null) 
+                throw new InvalidOperationException("Tabela não especificada");
+            if (_fields.Count == 0) 
+                throw new InvalidOperationException("Nenhum campo para atualizar");
+
+            return connection.ExecuteUpdateAsync(this);
+        }
+
+        /// <summary>
+        /// Executa o UPDATE e retorna a primeira linha afetada mapeada para o tipo T.
+        /// Não suportado quando All() foi usado; nesse caso use ExecuteAsync(connection).
+        /// </summary>
+        /// <typeparam name="T">Tipo do modelo (deve ter construtor sem parâmetros e propriedades mapeáveis).</typeparam>
+        /// <param name="connection">Conexão MySQL.</param>
+        /// <returns>A entidade atualizada ou default se nenhuma linha foi afetada.</returns>
+        public Task<T> ExecuteAsync<T>(MySQL connection) where T : new()
+        {
+            ArgumentNullException.ThrowIfNull(connection);
+            if (_tableName == null) 
+                throw new InvalidOperationException("Tabela não especificada");
+            if (_fields.Count == 0) 
+                throw new InvalidOperationException("Nenhum campo para atualizar");
+
+            return connection.ExecuteUpdateAsync<T>(this);
+        }
 
         private string EscapeIdentifier(string identifier)
         {
@@ -330,6 +358,39 @@ namespace Jovemnf.MySQL.Builder
             }
             command.CommandText = sql;
             
+            return (sql, command);
+        }
+
+        /// <summary>
+        /// Constrói um SELECT * para as mesmas condições WHERE do UPDATE.
+        /// Usado por ExecuteAsync&lt;T&gt; para retornar a(s) linha(s) atualizada(s).
+        /// </summary>
+        internal (string Sql, MySqlCommand Command) BuildSelect()
+        {
+            if (_whereConditions.Count == 0 && !_allowAll)
+                throw new InvalidOperationException("Nenhuma condição WHERE definida para SELECT.");
+            if (_allowAll)
+                throw new InvalidOperationException("ExecuteAsync<T> não é suportado quando All() foi usado. Use ExecuteAsync() para obter o número de linhas afetadas.");
+
+            var command = new MySqlCommand();
+            var savedCounter = _paramCounter;
+            _paramCounter = 0;
+
+            var whereClauses = new List<string>();
+            for (int i = 0; i < _whereConditions.Count; i++)
+            {
+                var condition = _whereConditions[i];
+                var logic = i > 0 ? condition.Logic : "";
+                string clause = BuildWhereClause(condition, command);
+                if (i > 0)
+                    whereClauses.Add($"{logic} {clause}");
+                else
+                    whereClauses.Add(clause);
+            }
+
+            var sql = $"SELECT * FROM `{EscapeIdentifier(_tableName)}` WHERE {string.Join(" ", whereClauses)}";
+            command.CommandText = sql;
+            _paramCounter = savedCounter;
             return (sql, command);
         }
 

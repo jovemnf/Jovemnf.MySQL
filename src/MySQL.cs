@@ -374,6 +374,25 @@ public class MySQL : IDisposable, IAsyncDisposable
         return 0;
     }
 
+    /// <summary>
+    /// Executa o INSERT e retorna a linha inserida mapeada para T (SELECT pela chave id).
+    /// </summary>
+    public async Task<T> ExecuteInsertAsync<T>(InsertQueryBuilder builder) where T : new()
+    {
+        var lastId = await ExecuteInsertAsync(builder, lastId: true);
+        if (lastId <= 0)
+            return default;
+
+        var (_, cmdSel) = builder.BuildSelectById(lastId);
+        cmdSel.Connection = bdConn;
+        if (trans != null) cmdSel.Transaction = trans;
+
+        await using var reader = await cmdSel.ExecuteReaderAsync();
+        await using var mysqlReader = new MySQLReader(reader);
+        var list = await mysqlReader.ToModelListAsync<T>();
+        return list.Count > 0 ? list[0] : default;
+    }
+
     public async Task<T> ExecuteInsertAsync<T>(T entity) where T : class
     {
         var builder = new InsertQueryBuilder<T>();
@@ -441,9 +460,9 @@ public class MySQL : IDisposable, IAsyncDisposable
     public MySQLReader ExecuteQuerySync(SelectQueryBuilder builder)
     {
         var (sql, command) = builder.Build();
-        this.cmd = command;
-        this.cmd.Connection = this.bdConn;
-        if (this.trans != null) this.cmd.Transaction = this.trans;
+        cmd = command;
+        cmd.Connection = this.bdConn;
+        if (trans != null) this.cmd.Transaction = this.trans;
         return ExecuteQuerySync();
     }
 
@@ -466,10 +485,19 @@ public class MySQL : IDisposable, IAsyncDisposable
     public async Task<MySQLReader> ExecuteQueryAsync(SelectQueryBuilder builder)
     {
         var (sql, command) = builder.Build();
-        this.cmd = command;
-        this.cmd.Connection = this.bdConn;
-        if (this.trans != null) this.cmd.Transaction = this.trans;
+        cmd = command;
+        cmd.Connection = this.bdConn;
+        if (trans != null) this.cmd.Transaction = this.trans;
         return await ExecuteQueryAsync();
+    }
+
+    /// <summary>
+    /// Executa o SELECT e retorna todas as linhas mapeadas para o tipo T.
+    /// </summary>
+    public async Task<List<T>> ExecuteQueryAsync<T>(SelectQueryBuilder builder) where T : new()
+    {
+        await using var reader = await ExecuteQueryAsync(builder);
+        return await reader.ToModelListAsync<T>();
     }
 
     public long ExecuteCountSync(SelectQueryBuilder builder)
@@ -654,6 +682,30 @@ public class MySQL : IDisposable, IAsyncDisposable
         return await ExecuteUpdateAsync();
     }
 
+    /// <summary>
+    /// Executa o UPDATE e retorna a primeira linha afetada mapeada para T.
+    /// Não suportado quando o builder usa All() (atualização em todas as linhas).
+    /// </summary>
+    public async Task<T> ExecuteUpdateAsync<T>(UpdateQueryBuilder builder) where T : new()
+    {
+        var (sqlUp, cmdUp) = builder.Build();
+        cmdUp.Connection = this.bdConn;
+        if (this.trans != null) cmdUp.Transaction = this.trans;
+
+        var rowsAffected = await cmdUp.ExecuteNonQueryAsync();
+        if (rowsAffected == 0)
+            return default;
+
+        var (_, cmdSel) = builder.BuildSelect();
+        cmdSel.Connection = this.bdConn;
+        if (this.trans != null) cmdSel.Transaction = this.trans;
+
+        await using var reader = await cmdSel.ExecuteReaderAsync();
+        using var mysqlReader = new MySQLReader(reader);
+        var list = await mysqlReader.ToModelListAsync<T>();
+        return list.Count > 0 ? list[0] : default;
+    }
+
     public int ExecuteDeleteSync(DeleteQueryBuilder builder)
     {
         var (sql, command) = builder.Build();
@@ -676,6 +728,29 @@ public class MySQL : IDisposable, IAsyncDisposable
             this.cmd.Transaction = this.trans;
 
         return await this.cmd.ExecuteNonQueryAsync();
+    }
+
+    /// <summary>
+    /// Executa SELECT das linhas que atendem ao WHERE, depois DELETE, e retorna as entidades mapeadas para T.
+    /// </summary>
+    public async Task<List<T>> ExecuteDeleteAsync<T>(DeleteQueryBuilder builder) where T : new()
+    {
+        var (_, cmdSel) = builder.BuildSelect();
+        cmdSel.Connection = this.bdConn;
+        if (this.trans != null) cmdSel.Transaction = this.trans;
+
+        await using var reader = await cmdSel.ExecuteReaderAsync();
+        using (var mysqlReader = new MySQLReader(reader))
+        {
+            var list = await mysqlReader.ToModelListAsync<T>();
+
+            var (__, cmdDel) = builder.Build();
+            cmdDel.Connection = this.bdConn;
+            if (this.trans != null) cmdDel.Transaction = this.trans;
+            await cmdDel.ExecuteNonQueryAsync();
+
+            return list;
+        }
     }
 
     private async Task<int> LastIdAsync()

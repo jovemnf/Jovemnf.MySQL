@@ -47,6 +47,28 @@ public class SelectQueryBuilder
             throw new ArgumentException($"Operador não permitido: {op}");
         }
     }
+    
+    public Task ExecuteAsync(MySQL connection)
+    {
+        ArgumentNullException.ThrowIfNull(connection);
+        if (_tableName == null) 
+            throw new InvalidOperationException("Tabela não especificada");
+        return connection.ExecuteQueryAsync(this);
+    }
+
+    /// <summary>
+    /// Executa o SELECT e retorna todas as linhas mapeadas para o tipo T.
+    /// </summary>
+    /// <typeparam name="T">Tipo do modelo (deve ter construtor sem parâmetros e propriedades mapeáveis).</typeparam>
+    /// <param name="connection">Conexão MySQL.</param>
+    /// <returns>Lista das entidades do resultado da consulta.</returns>
+    public Task<List<T>> ExecuteAsync<T>(MySQL connection) where T : new()
+    {
+        ArgumentNullException.ThrowIfNull(connection);
+        if (_tableName == null) 
+            throw new InvalidOperationException("Tabela não especificada");
+        return connection.ExecuteQueryAsync<T>(this);
+    }
 
     public SelectQueryBuilder Select(params string[] fields)
     {

@@ -9,6 +9,7 @@ Pacote .NET Core de alto desempenho para interação simplificada com bancos de 
 - **Tipagem Forte:** Enum `QueryOperator` para evitar strings mágicas em operadores SQL.
 - **Segurança Nativa:** Proteção robusta contra SQL Injection (parametrização, escape de identificadores e proteção contra mass operations).
 - **Mapeamento Automático (ORM):** Conversão automática de resultados para classes C# (POCOs).
+- **ExecuteAsync&lt;T&gt;:** Retorno tipado nos builders (Select/Insert/Update/Delete) com resultado já mapeado para o modelo.
 - **Suporte a Transações:** Execução atômica de múltiplas operações.
 - **Async/Await:** Suporte completo para operações assíncronas.
 - **Mapeamento Avançado:** Atributos `DbTable` e `DbField` para controle total sobre nomes de tabelas e colunas, com suporte a `snake_case`.
@@ -223,6 +224,72 @@ using (var mysql = new MySQL(config))
 // Ou mapear uma lista completa:
 List<Usuario> users = await reader.ToModelListAsync<Usuario>();
 ```
+
+### ExecuteAsync&lt;T&gt; — Retorno tipado nos builders
+
+Todos os builders fluentes oferecem um overload **`ExecuteAsync<T>(MySQL connection)`** que executa a operação e devolve o resultado já mapeado para o tipo `T`. O tipo `T` deve ter construtor sem parâmetros e propriedades compatíveis com as colunas (ou use os atributos `DbTable`/`DbField`).
+
+| Builder | Retorno | Descrição |
+|--------|--------|-----------|
+| **SelectQueryBuilder** | `Task<List<T>>` | Todas as linhas do resultado mapeadas para `T`. |
+| **InsertQueryBuilder** | `Task<T>` | A linha inserida (via `LAST_INSERT_ID()` + `SELECT`). Assume coluna de chave primária `id` auto-incremento. |
+| **UpdateQueryBuilder** | `Task<T>` | A primeira linha afetada após o UPDATE (SELECT com o mesmo WHERE). Não suportado com `.All()`. |
+| **DeleteQueryBuilder** | `Task<List<T>>` | As linhas que foram deletadas (SELECT com o mesmo WHERE antes do DELETE). Não suportado com `.All()`. |
+
+#### Exemplos
+
+**Select — lista tipada**
+```csharp
+using (var mysql = new MySQL(config))
+{
+    await mysql.OpenAsync();
+    var lista = await SelectQueryBuilder.For<Usuario>()
+        .Select("*")
+        .Where("ativo", true)
+        .ExecuteAsync<Usuario>(mysql);
+    // lista é List<Usuario>
+}
+```
+
+**Insert — entidade inserida**
+```csharp
+using (var mysql = new MySQL(config))
+{
+    await mysql.OpenAsync();
+    var inserido = await InsertQueryBuilder.For<Usuario>()
+        .Value("Nome", "Maria")
+        .Value("Email", "maria@exemplo.com")
+        .ExecuteAsync<Usuario>(mysql);
+    // inserido contém os dados do banco (incluindo Id gerado)
+}
+```
+
+**Update — entidade atualizada**
+```csharp
+using (var mysql = new MySQL(config))
+{
+    await mysql.OpenAsync();
+    var atualizado = await UpdateQueryBuilder.For<Usuario>()
+        .Set("Nome", "Maria Silva")
+        .Where("Id", 123)
+        .ExecuteAsync<Usuario>(mysql);
+    // atualizado é a linha já atualizada ou default se 0 linhas
+}
+```
+
+**Delete — entidades removidas**
+```csharp
+using (var mysql = new MySQL(config))
+{
+    await mysql.OpenAsync();
+    var removidas = await DeleteQueryBuilder.For<Usuario>()
+        .Where("status", "excluido")
+        .ExecuteAsync<Usuario>(mysql);
+    // removidas é List<Usuario> com as linhas que foram deletadas
+}
+```
+
+Quando não precisar do resultado tipado, use o `ExecuteAsync(connection)` sem tipo (ou os métodos existentes na classe `MySQL`) para obter apenas o número de linhas afetadas ou o reader.
 
 ### 🏷️ Mapeamento Avançado (Atributos)
 
