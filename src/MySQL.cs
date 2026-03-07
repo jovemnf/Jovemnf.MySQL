@@ -20,6 +20,7 @@ public class MySQL : IDisposable, IAsyncDisposable
     private MySqlCommand cmd = null;
     private MySqlDataAdapter da;
     private static MySQLData Data = default;
+    private readonly string _sessionTimeZone = string.Empty;
     MySqlTransaction trans;
     bool InitTrans = false;
 
@@ -93,6 +94,7 @@ public class MySQL : IDisposable, IAsyncDisposable
         Data.Base = config.Database;
         Data.Charset = config.Charset;
         Data.Port = config.Port;
+        Data.SessionTimeZone = MySqlSessionTimeZone.Normalize(config.SessionTimeZone);
     }
     
     public static void Init(MySQLConfiguration config, PoolConfiguration pool)
@@ -106,6 +108,7 @@ public class MySQL : IDisposable, IAsyncDisposable
         Data.Base = config.Database;
         Data.Charset = config.Charset;
         Data.Port = config.Port;
+        Data.SessionTimeZone = MySqlSessionTimeZone.Normalize(config.SessionTimeZone);
 
         MaximumPoolSize = pool.MaxPoolSize;
         MinimumPoolSize = pool.MinPoolSize;
@@ -126,7 +129,7 @@ public class MySQL : IDisposable, IAsyncDisposable
     /// <param name="port">Porta do servidor MySQL. Padrão: 3306.</param>
     /// <param name="chatset">Charset a ser usado na conexão. Padrão: utf8.</param>
     [Obsolete("Use INIT(MySQLConfiguration config) para melhor legibilidade.")]
-    public static void Init(string host, string database, string username, string password, uint port = 3306, string chatset = "utf8")
+    public static void Init(string host, string database, string username, string password, uint port = 3306, string chatset = "utf8", string sessionTimeZone = null)
     {
         Data.HOST = host;
         Data.UserName = username;
@@ -134,6 +137,7 @@ public class MySQL : IDisposable, IAsyncDisposable
         Data.Base = database;
         Data.Charset = chatset;
         Data.Port = port;
+        Data.SessionTimeZone = MySqlSessionTimeZone.Normalize(sessionTimeZone);
     }
 
     /// <summary>
@@ -144,6 +148,8 @@ public class MySQL : IDisposable, IAsyncDisposable
     {
         if (config == null)
             throw new ArgumentNullException(nameof(config));
+
+        _sessionTimeZone = MySqlSessionTimeZone.Normalize(config.SessionTimeZone);
 
         try
         {
@@ -191,8 +197,10 @@ public class MySQL : IDisposable, IAsyncDisposable
     /// <param name="port">Porta do servidor MySQL. Padrão: 3306.</param>
     /// <param name="chatset">Charset a ser usado na conexão. Padrão: utf8.</param>
     [Obsolete("Use MySQL(MySQLConfiguration config) para melhor legibilidade.")]
-    public MySQL(string host, string database, string username, string password, uint port = 3306, string chatset = "utf8")
+    public MySQL(string host, string database, string username, string password, uint port = 3306, string chatset = "utf8", string sessionTimeZone = null)
     {
+        _sessionTimeZone = MySqlSessionTimeZone.Normalize(sessionTimeZone);
+
         try
         {
             if (bdConn is null)
@@ -223,14 +231,16 @@ public class MySQL : IDisposable, IAsyncDisposable
         }
     }
 
-    public MySQL(string stringConnect)
+    public MySQL(string stringConnect, string sessionTimeZone = null)
     {
         //this.bdDataSet = new DataSet();
+        _sessionTimeZone = MySqlSessionTimeZone.Normalize(sessionTimeZone);
         bdConn = new MySqlConnection(stringConnect);
     }
 
     public MySQL()
     {
+        _sessionTimeZone = Data.SessionTimeZone;
         MySqlConnectionStringBuilder connString = new ()
         {
             Server = Data.HOST,
@@ -818,6 +828,7 @@ public class MySQL : IDisposable, IAsyncDisposable
             if (this.bdConn != null && this.bdConn.State != ConnectionState.Open)
             {
                 this.bdConn.Open();
+                MySqlSessionTimeZone.Apply(this.bdConn, _sessionTimeZone);
             }
         }
         catch
@@ -833,6 +844,7 @@ public class MySQL : IDisposable, IAsyncDisposable
             if (this.bdConn != null && this.bdConn.State != ConnectionState.Open)
             {
                 await this.bdConn.OpenAsync();
+                await MySqlSessionTimeZone.ApplyAsync(this.bdConn, _sessionTimeZone);
             }
         }
         catch
@@ -980,6 +992,11 @@ public class MySQL : IDisposable, IAsyncDisposable
     /// Indica se há uma transação ativa.
     /// </summary>
     public bool HasActiveTransaction => InitTrans && trans != null;
+
+    /// <summary>
+    /// Timezone padrão aplicado à sessão MySQL desta conexão.
+    /// </summary>
+    public string SessionTimeZone => _sessionTimeZone;
 
     public object ExecuteScalarSync()
     {
@@ -1285,6 +1302,7 @@ public class MySQL : IDisposable, IAsyncDisposable
         public string Base;
         public string Charset;
         public uint Port;
+        public string SessionTimeZone;
     }
 
 }

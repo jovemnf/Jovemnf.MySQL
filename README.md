@@ -38,7 +38,8 @@ var config = new MySQLConfiguration
     Username = "usuario",
     Password = "senha",
     Port = 3306,
-    Charset = "utf8"
+    Charset = "utf8",
+    SessionTimeZone = "-03:00" // Opcional: aplica SET time_zone na sessao
 };
 
 // Opcional: Inicializar configuração global
@@ -86,7 +87,47 @@ using (var mysql = new MySQL(config))
 // Opção 2: Executando via DatabaseHelper (Gerencia conexão automaticamente)
 var helper = new DatabaseHelper(connectionString);
 int rows = await helper.ExecuteUpdateAsync(builder);
+
+// Se quiser definir o timezone padrao da sessao para esta conexao:
+var helperWithTimeZone = new DatabaseHelper(connectionString, "-03:00");
+int rowsWithTimeZone = await helperWithTimeZone.ExecuteUpdateAsync(builder);
 ```
+
+### Timezone por Conexão
+
+Se precisar consultar ou gravar datas usando um timezone padrão por conexão, defina `SessionTimeZone` no `MySQLConfiguration` ou passe o valor no `DatabaseHelper`.
+
+```csharp
+var config = new MySQLConfiguration
+{
+    Host = "localhost",
+    Database = "meu_banco",
+    Username = "usuario",
+    Password = "senha",
+    SessionTimeZone = "America/Sao_Paulo"
+};
+
+using var mysql = new MySQL(config);
+await mysql.OpenAsync();
+```
+
+Valores aceitos incluem offsets (`"+00:00"`, `"-03:00"`), nomes como `"UTC"` e `"SYSTEM"`, além de identificadores como `"America/Sao_Paulo"`. Para maior compatibilidade com qualquer instância MySQL, prefira offsets fixos; nomes como `"America/Sao_Paulo"` dependem das tabelas de timezone estarem carregadas no servidor.
+
+### Conversão Explícita para Colunas DATETIME
+
+Para colunas `DATETIME`, o timezone da sessão MySQL não faz conversão automática. Nesses casos, você pode converter explicitamente os valores do filtro antes de enviar a query, preservando o uso de índices na coluna:
+
+```csharp
+var inicioLocal = new DateTime(2024, 1, 1, 0, 0, 0);
+var fimLocal = new DateTime(2024, 1, 31, 23, 59, 59);
+
+var builder = new SelectQueryBuilder()
+    .Table("eventos")
+    .UseDateTimeTimeZone("-03:00", "UTC")
+    .WhereBetweenDateTime("created_at", inicioLocal, fimLocal);
+```
+
+No exemplo acima, os parâmetros enviados ao banco são convertidos de `-03:00` para `UTC` antes do bind. Os builders `Select`, `Update` e `Delete` também expõem `WhereDateTime` e `OrWhereDateTime` para comparações pontuais.
 
 #### Operadores Suportados
 O builder suporta diversos operadores: `WhereIn`, `WhereNotIn`, `WhereNull`, `WhereNotNull`, `WhereBetween`, `WhereLike`, e `OrWhere`.

@@ -12,6 +12,8 @@ namespace Jovemnf.MySQL.Builder
     public class UpdateQueryBuilder
     {
         protected string _tableName;
+        private string _dateTimeSourceTimeZone;
+        private string _dateTimeTargetTimeZone;
 
         public static UpdateQueryBuilder For<T>() => new UpdateQueryBuilder<T>();
 
@@ -209,6 +211,18 @@ namespace Jovemnf.MySQL.Builder
             return this;
         }
 
+        public UpdateQueryBuilder UseDateTimeTimeZone(string sourceTimeZone, string targetTimeZone)
+        {
+            _dateTimeSourceTimeZone = MySqlSessionTimeZone.Normalize(sourceTimeZone);
+            _dateTimeTargetTimeZone = MySqlSessionTimeZone.Normalize(targetTimeZone);
+            return this;
+        }
+
+        public UpdateQueryBuilder WhereDateTime(string field, DateTime value, string op = "=")
+        {
+            return Where(field, ConvertDateTimeValue(value), op);
+        }
+
         public UpdateQueryBuilder Where(string field, object value, QueryOperator op)
         {
             return Where(field, value, op.ToSqlString());
@@ -251,6 +265,11 @@ namespace Jovemnf.MySQL.Builder
             return this;
         }
 
+        public UpdateQueryBuilder OrWhereDateTime(string field, DateTime value, string op = "=")
+        {
+            return OrWhere(field, ConvertDateTimeValue(value), op);
+        }
+
         public UpdateQueryBuilder WhereNull(string field)
         {
             _whereConditions.Add(new WhereCondition 
@@ -284,6 +303,11 @@ namespace Jovemnf.MySQL.Builder
                 Logic = "AND"
             });
             return this;
+        }
+
+        public UpdateQueryBuilder WhereBetweenDateTime(string field, DateTime start, DateTime end)
+        {
+            return WhereBetween(field, ConvertDateTimeValue(start), ConvertDateTimeValue(end));
         }
 
         public UpdateQueryBuilder WhereLike(string field, string pattern)
@@ -441,6 +465,11 @@ namespace Jovemnf.MySQL.Builder
         private string GetNextParamName()
         {
             return $"p{_paramCounter++}";
+        }
+
+        private DateTime ConvertDateTimeValue(DateTime value)
+        {
+            return DateTimeTimeZoneConverter.Convert(value, _dateTimeSourceTimeZone, _dateTimeTargetTimeZone);
         }
 
         private class WhereCondition
@@ -609,16 +638,19 @@ namespace Jovemnf.MySQL
     public class DatabaseHelper
     {
         private readonly string _connectionString;
+        private readonly string _sessionTimeZone;
 
-        public DatabaseHelper(string connectionString)
+        public DatabaseHelper(string connectionString, string sessionTimeZone = null)
         {
             _connectionString = connectionString;
+            _sessionTimeZone = MySqlSessionTimeZone.Normalize(sessionTimeZone);
         }
 
         public async Task<int> ExecuteUpdateAsync(UpdateQueryBuilder builder)
         {
             using var connection = new MySqlConnection(_connectionString);
             await connection.OpenAsync();
+            await MySqlSessionTimeZone.ApplyAsync(connection, _sessionTimeZone);
             
             var executor = new UpdateQueryExecutor(connection);
             return await executor.ExecuteAsync(builder);
@@ -628,6 +660,7 @@ namespace Jovemnf.MySQL
         {
             using var connection = new MySqlConnection(_connectionString);
             await connection.OpenAsync();
+            await MySqlSessionTimeZone.ApplyAsync(connection, _sessionTimeZone);
             
             var executor = new DeleteQueryExecutor(connection);
             return await executor.ExecuteAsync(builder);
@@ -637,6 +670,7 @@ namespace Jovemnf.MySQL
         {
             using var connection = new MySqlConnection(_connectionString);
             connection.Open();
+            MySqlSessionTimeZone.Apply(connection, _sessionTimeZone);
             
             var executor = new DeleteQueryExecutor(connection);
             var (sql, command) = builder.Build();
@@ -649,6 +683,7 @@ namespace Jovemnf.MySQL
         {
             using var connection = new MySqlConnection(_connectionString);
             await connection.OpenAsync();
+            await MySqlSessionTimeZone.ApplyAsync(connection, _sessionTimeZone);
             
             var executor = new InsertQueryExecutor(connection);
             return await executor.ExecuteAsync(builder, lastID);
@@ -659,6 +694,7 @@ namespace Jovemnf.MySQL
         {
             var connection = new MySqlConnection(_connectionString);
             await connection.OpenAsync();
+            await MySqlSessionTimeZone.ApplyAsync(connection, _sessionTimeZone);
             
             var executor = new SelectQueryExecutor(connection);
             return await executor.ExecuteQueryAsync(builder);
@@ -670,6 +706,7 @@ namespace Jovemnf.MySQL
         {
             await using var connection = new MySqlConnection(_connectionString);
             await connection.OpenAsync();
+            await MySqlSessionTimeZone.ApplyAsync(connection, _sessionTimeZone);
 
             await using var transaction = await connection.BeginTransactionAsync();
             
@@ -695,6 +732,7 @@ namespace Jovemnf.MySQL
         {
             await using var connection = new MySqlConnection(_connectionString);
             await connection.OpenAsync();
+            await MySqlSessionTimeZone.ApplyAsync(connection, _sessionTimeZone);
 
             await using var transaction = await connection.BeginTransactionAsync();
             

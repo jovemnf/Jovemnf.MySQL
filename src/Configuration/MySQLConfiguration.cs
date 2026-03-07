@@ -40,4 +40,10 @@ public class MySQLConfiguration
     /// String de conexão completa. Se fornecida, outras propriedades são ignoradas.
     /// </summary>
     public string ConnectionString { get; set; }
+
+    /// <summary>
+    /// Timezone padrão da sessão MySQL para esta conexão.
+    /// Exemplos: "+00:00", "UTC", "SYSTEM" ou "America/Sao_Paulo".
+    /// </summary>
+    public string SessionTimeZone { get; set; }
 }
