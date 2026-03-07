@@ -12,6 +12,8 @@ namespace Jovemnf.MySQL.Builder
     public class UpdateQueryBuilder
     {
         protected string _tableName;
+        private string _dateTimeSourceTimeZone;
+        private string _dateTimeTargetTimeZone;
 
         public static UpdateQueryBuilder For<T>() => new UpdateQueryBuilder<T>();
 
@@ -209,6 +211,18 @@ namespace Jovemnf.MySQL.Builder
             return this;
         }
 
+        public UpdateQueryBuilder UseDateTimeTimeZone(string sourceTimeZone, string targetTimeZone)
+        {
+            _dateTimeSourceTimeZone = MySqlSessionTimeZone.Normalize(sourceTimeZone);
+            _dateTimeTargetTimeZone = MySqlSessionTimeZone.Normalize(targetTimeZone);
+            return this;
+        }
+
+        public UpdateQueryBuilder WhereDateTime(string field, DateTime value, string op = "=")
+        {
+            return Where(field, ConvertDateTimeValue(value), op);
+        }
+
         public UpdateQueryBuilder Where(string field, object value, QueryOperator op)
         {
             return Where(field, value, op.ToSqlString());
@@ -251,6 +265,11 @@ namespace Jovemnf.MySQL.Builder
             return this;
         }
 
+        public UpdateQueryBuilder OrWhereDateTime(string field, DateTime value, string op = "=")
+        {
+            return OrWhere(field, ConvertDateTimeValue(value), op);
+        }
+
         public UpdateQueryBuilder WhereNull(string field)
         {
             _whereConditions.Add(new WhereCondition 
@@ -284,6 +303,11 @@ namespace Jovemnf.MySQL.Builder
                 Logic = "AND"
             });
             return this;
+        }
+
+        public UpdateQueryBuilder WhereBetweenDateTime(string field, DateTime start, DateTime end)
+        {
+            return WhereBetween(field, ConvertDateTimeValue(start), ConvertDateTimeValue(end));
         }
 
         public UpdateQueryBuilder WhereLike(string field, string pattern)
@@ -441,6 +465,11 @@ namespace Jovemnf.MySQL.Builder
         private string GetNextParamName()
         {
             return $"p{_paramCounter++}";
+        }
+
+        private DateTime ConvertDateTimeValue(DateTime value)
+        {
+            return DateTimeTimeZoneConverter.Convert(value, _dateTimeSourceTimeZone, _dateTimeTargetTimeZone);
         }
 
         private class WhereCondition

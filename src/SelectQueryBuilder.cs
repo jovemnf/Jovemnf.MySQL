@@ -10,6 +10,8 @@ namespace Jovemnf.MySQL.Builder;
 public class SelectQueryBuilder
 {
     protected string _tableName;
+    private string _dateTimeSourceTimeZone;
+    private string _dateTimeTargetTimeZone;
 
     public static SelectQueryBuilder For<T>() => new SelectQueryBuilder<T>();
     private List<SelectionField> _fields = new List<SelectionField>();
@@ -121,6 +123,18 @@ public class SelectQueryBuilder
         return this;
     }
 
+    public SelectQueryBuilder UseDateTimeTimeZone(string sourceTimeZone, string targetTimeZone)
+    {
+        _dateTimeSourceTimeZone = MySqlSessionTimeZone.Normalize(sourceTimeZone);
+        _dateTimeTargetTimeZone = MySqlSessionTimeZone.Normalize(targetTimeZone);
+        return this;
+    }
+
+    public SelectQueryBuilder WhereDateTime(string field, DateTime value, string op = "=")
+    {
+        return Where(field, ConvertDateTimeValue(value), op);
+    }
+
     public SelectQueryBuilder WhereRaw(string sql, params object[] parameters)
     {
         _whereConditions.Add(new WhereCondition { RawSql = sql, RawParameters = parameters, Operator = "RAW", Logic = "AND" });
@@ -132,6 +146,11 @@ public class SelectQueryBuilder
         ValidateOperator(op);
         _whereConditions.Add(new WhereCondition { Field = ResolveField(field), Value = value, Operator = op, Logic = "OR" });
         return this;
+    }
+
+    public SelectQueryBuilder OrWhereDateTime(string field, DateTime value, string op = "=")
+    {
+        return OrWhere(field, ConvertDateTimeValue(value), op);
     }
 
     public SelectQueryBuilder OrWhereRaw(string sql, params object[] parameters)
@@ -168,6 +187,11 @@ public class SelectQueryBuilder
     {
         _whereConditions.Add(new WhereCondition { Field = ResolveField(field), Value = start, SecondValue = end, Operator = "BETWEEN", Logic = "AND" });
         return this;
+    }
+
+    public SelectQueryBuilder WhereBetweenDateTime(string field, DateTime start, DateTime end)
+    {
+        return WhereBetween(field, ConvertDateTimeValue(start), ConvertDateTimeValue(end));
     }
 
     public SelectQueryBuilder WhereLike(string field, string pattern)
@@ -302,6 +326,11 @@ public class SelectQueryBuilder
     }
 
     private string GetNextParamName() => $"p{_paramCounter++}";
+
+    private DateTime ConvertDateTimeValue(DateTime value)
+    {
+        return DateTimeTimeZoneConverter.Convert(value, _dateTimeSourceTimeZone, _dateTimeTargetTimeZone);
+    }
 
     private class SelectionField
     {

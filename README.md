@@ -113,6 +113,22 @@ await mysql.OpenAsync();
 
 Valores aceitos incluem offsets (`"+00:00"`, `"-03:00"`), nomes como `"UTC"` e `"SYSTEM"`, além de identificadores como `"America/Sao_Paulo"`. Para maior compatibilidade com qualquer instância MySQL, prefira offsets fixos; nomes como `"America/Sao_Paulo"` dependem das tabelas de timezone estarem carregadas no servidor.
 
+### Conversão Explícita para Colunas DATETIME
+
+Para colunas `DATETIME`, o timezone da sessão MySQL não faz conversão automática. Nesses casos, você pode converter explicitamente os valores do filtro antes de enviar a query, preservando o uso de índices na coluna:
+
+```csharp
+var inicioLocal = new DateTime(2024, 1, 1, 0, 0, 0);
+var fimLocal = new DateTime(2024, 1, 31, 23, 59, 59);
+
+var builder = new SelectQueryBuilder()
+    .Table("eventos")
+    .UseDateTimeTimeZone("-03:00", "UTC")
+    .WhereBetweenDateTime("created_at", inicioLocal, fimLocal);
+```
+
+No exemplo acima, os parâmetros enviados ao banco são convertidos de `-03:00` para `UTC` antes do bind. Os builders `Select`, `Update` e `Delete` também expõem `WhereDateTime` e `OrWhereDateTime` para comparações pontuais.
+
 #### Operadores Suportados
 O builder suporta diversos operadores: `WhereIn`, `WhereNotIn`, `WhereNull`, `WhereNotNull`, `WhereBetween`, `WhereLike`, e `OrWhere`.
 
