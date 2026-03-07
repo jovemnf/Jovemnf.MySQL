@@ -38,7 +38,8 @@ var config = new MySQLConfiguration
     Username = "usuario",
     Password = "senha",
     Port = 3306,
-    Charset = "utf8"
+    Charset = "utf8",
+    SessionTimeZone = "-03:00" // Opcional: aplica SET time_zone na sessao
 };
 
 // Opcional: Inicializar configuração global
@@ -86,7 +87,31 @@ using (var mysql = new MySQL(config))
 // Opção 2: Executando via DatabaseHelper (Gerencia conexão automaticamente)
 var helper = new DatabaseHelper(connectionString);
 int rows = await helper.ExecuteUpdateAsync(builder);
+
+// Se quiser definir o timezone padrao da sessao para esta conexao:
+var helperWithTimeZone = new DatabaseHelper(connectionString, "-03:00");
+int rowsWithTimeZone = await helperWithTimeZone.ExecuteUpdateAsync(builder);
 ```
+
+### Timezone por Conexão
+
+Se precisar consultar ou gravar datas usando um timezone padrão por conexão, defina `SessionTimeZone` no `MySQLConfiguration` ou passe o valor no `DatabaseHelper`.
+
+```csharp
+var config = new MySQLConfiguration
+{
+    Host = "localhost",
+    Database = "meu_banco",
+    Username = "usuario",
+    Password = "senha",
+    SessionTimeZone = "America/Sao_Paulo"
+};
+
+using var mysql = new MySQL(config);
+await mysql.OpenAsync();
+```
+
+Valores aceitos incluem offsets (`"+00:00"`, `"-03:00"`), nomes como `"UTC"` e `"SYSTEM"`, além de identificadores como `"America/Sao_Paulo"`. Para maior compatibilidade com qualquer instância MySQL, prefira offsets fixos; nomes como `"America/Sao_Paulo"` dependem das tabelas de timezone estarem carregadas no servidor.
 
 #### Operadores Suportados
 O builder suporta diversos operadores: `WhereIn`, `WhereNotIn`, `WhereNull`, `WhereNotNull`, `WhereBetween`, `WhereLike`, e `OrWhere`.

@@ -609,16 +609,19 @@ namespace Jovemnf.MySQL
     public class DatabaseHelper
     {
         private readonly string _connectionString;
+        private readonly string _sessionTimeZone;
 
-        public DatabaseHelper(string connectionString)
+        public DatabaseHelper(string connectionString, string sessionTimeZone = null)
         {
             _connectionString = connectionString;
+            _sessionTimeZone = MySqlSessionTimeZone.Normalize(sessionTimeZone);
         }
 
         public async Task<int> ExecuteUpdateAsync(UpdateQueryBuilder builder)
         {
             using var connection = new MySqlConnection(_connectionString);
             await connection.OpenAsync();
+            await MySqlSessionTimeZone.ApplyAsync(connection, _sessionTimeZone);
             
             var executor = new UpdateQueryExecutor(connection);
             return await executor.ExecuteAsync(builder);
@@ -628,6 +631,7 @@ namespace Jovemnf.MySQL
         {
             using var connection = new MySqlConnection(_connectionString);
             await connection.OpenAsync();
+            await MySqlSessionTimeZone.ApplyAsync(connection, _sessionTimeZone);
             
             var executor = new DeleteQueryExecutor(connection);
             return await executor.ExecuteAsync(builder);
@@ -637,6 +641,7 @@ namespace Jovemnf.MySQL
         {
             using var connection = new MySqlConnection(_connectionString);
             connection.Open();
+            MySqlSessionTimeZone.Apply(connection, _sessionTimeZone);
             
             var executor = new DeleteQueryExecutor(connection);
             var (sql, command) = builder.Build();
@@ -649,6 +654,7 @@ namespace Jovemnf.MySQL
         {
             using var connection = new MySqlConnection(_connectionString);
             await connection.OpenAsync();
+            await MySqlSessionTimeZone.ApplyAsync(connection, _sessionTimeZone);
             
             var executor = new InsertQueryExecutor(connection);
             return await executor.ExecuteAsync(builder, lastID);
@@ -659,6 +665,7 @@ namespace Jovemnf.MySQL
         {
             var connection = new MySqlConnection(_connectionString);
             await connection.OpenAsync();
+            await MySqlSessionTimeZone.ApplyAsync(connection, _sessionTimeZone);
             
             var executor = new SelectQueryExecutor(connection);
             return await executor.ExecuteQueryAsync(builder);
@@ -670,6 +677,7 @@ namespace Jovemnf.MySQL
         {
             await using var connection = new MySqlConnection(_connectionString);
             await connection.OpenAsync();
+            await MySqlSessionTimeZone.ApplyAsync(connection, _sessionTimeZone);
 
             await using var transaction = await connection.BeginTransactionAsync();
             
@@ -695,6 +703,7 @@ namespace Jovemnf.MySQL
         {
             await using var connection = new MySqlConnection(_connectionString);
             await connection.OpenAsync();
+            await MySqlSessionTimeZone.ApplyAsync(connection, _sessionTimeZone);
 
             await using var transaction = await connection.BeginTransactionAsync();
             
