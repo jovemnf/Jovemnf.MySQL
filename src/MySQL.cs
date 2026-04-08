@@ -10,8 +10,6 @@ using Jovemnf.MySQL.Configuration;
 
 namespace Jovemnf.MySQL;
 
-
-
 public class MySQL : IDisposable, IAsyncDisposable
 {
 
@@ -374,6 +372,18 @@ public class MySQL : IDisposable, IAsyncDisposable
         return 0;
     }
 
+    public async Task<int> ExecuteInsertBatchAsync(InsertBatchQueryBuilder builder)
+    {
+        var (sql, command) = builder.Build();
+        this.cmd = command;
+        this.cmd.Connection = this.bdConn;
+
+        if (this.trans != null)
+            this.cmd.Transaction = this.trans;
+
+        return await this.cmd.ExecuteNonQueryAsync();
+    }
+
     /// <summary>
     /// Executa o INSERT e retorna a linha inserida mapeada para T (SELECT pela chave id).
     /// </summary>
@@ -439,6 +449,18 @@ public class MySQL : IDisposable, IAsyncDisposable
             return LastIdSync();
 
         return 0;
+    }
+
+    public int ExecuteInsertBatchSync(InsertBatchQueryBuilder builder)
+    {
+        var (sql, command) = builder.Build();
+        this.cmd = command;
+        this.cmd.Connection = this.bdConn;
+
+        if (this.trans != null)
+            this.cmd.Transaction = this.trans;
+
+        return this.cmd.ExecuteNonQuery();
     }
 
     public MySQLReader ExecuteQuerySync()

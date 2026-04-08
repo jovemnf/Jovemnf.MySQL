@@ -109,6 +109,112 @@ using (var mysql = new MySQL(config))
 }
 ```
 
+### Fluent Insert Batch Query Builder
+
+O `InsertBatchQueryBuilder` permite inserir múltiplas linhas em uma única operação e também suportar `upsert` com `ON DUPLICATE KEY UPDATE`.
+
+```csharp
+using Jovemnf.MySQL;
+using Jovemnf.MySQL.Builder;
+
+var builder = new InsertBatchQueryBuilder()
+    .Table("posicoes")
+    .Row(new Dictionary<string, object>
+    {
+        ["tracker_id"] = 1,
+        ["status"] = "online",
+        ["velocidade"] = 80
+    })
+    .Row(new Dictionary<string, object>
+    {
+        ["tracker_id"] = 2,
+        ["status"] = "offline",
+        ["velocidade"] = 0
+    })
+    .OnDuplicateKeyUpdate("status", "velocidade");
+
+using (var mysql = new MySQL(config))
+{
+    await mysql.OpenAsync();
+    int affectedRows = await mysql.ExecuteInsertBatchAsync(builder);
+}
+```
+
+#### Upsert Atualizando Todos os Campos, Exceto Alguns
+
+Quando quiser atualizar todos os campos do batch em caso de chave duplicada, exceto alguns campos específicos:
+
+```csharp
+var builder = new InsertBatchQueryBuilder()
+    .Table("posicoes")
+    .Row(new Dictionary<string, object>
+    {
+        ["tracker_id"] = 1,
+        ["status"] = "online",
+        ["ultima_posicao"] = DateTime.Now
+    })
+    .OnDuplicateKeyUpdateAllExcept("tracker_id");
+```
+
+#### Builder Genérico para Batch
+
+Você também pode usar a versão genérica para mapear automaticamente tabela e colunas a partir de uma classe:
+
+```csharp
+[DbTable("veiculos")]
+public class Veiculo
+{
+    [DbField("tracker_id")]
+    public int Id { get; set; }
+
+    [DbField("placa")]
+    public string Placa { get; set; }
+
+    [DbField("status")]
+    public string Status { get; set; }
+}
+
+var builder = InsertBatchQueryBuilder.For<Veiculo>()
+    .RowsFrom(new[]
+    {
+        new Veiculo { Id = 1, Placa = "ABC1234", Status = "ativo" },
+        new Veiculo { Id = 2, Placa = "DEF5678", Status = "inativo" }
+    })
+    .OnDuplicateKeyUpdate("Status");
+
+var helper = new DatabaseHelper(connectionString);
+int affectedRows = await helper.ExecuteInsertBatchAsync(builder);
+```
+
+#### Criando Rows a Partir de um Array ou Lista com Função
+
+Se você já tiver um array ou `List<T>` e quiser transformar cada item em uma linha do batch sem fazer o `foreach` manualmente, use o overload `Rows(items, map)`:
+
+```csharp
+var itens = new[]
+{
+    new { TrackerId = 1, Status = "online", Velocidade = 80 },
+    new { TrackerId = 2, Status = "offline", Velocidade = 0 }
+};
+
+var builder = new InsertBatchQueryBuilder()
+    .Table("posicoes")
+    .Rows(itens, item => new Dictionary<string, object>
+    {
+        ["tracker_id"] = item.TrackerId,
+        ["status"] = item.Status,
+        ["velocidade"] = item.Velocidade
+    })
+    .OnDuplicateKeyUpdate("status", "velocidade");
+```
+
+#### Regras do Batch
+
+- Todas as linhas do batch devem possuir o mesmo conjunto de colunas.
+- O retorno de `ExecuteInsertBatchAsync(...)` é a quantidade de linhas afetadas.
+- Diferente do `InsertQueryBuilder`, o batch não usa `LAST_INSERT_ID()` nem `ExecuteAsync<T>()`, pois isso não é confiável para múltiplas linhas.
+- Os mesmos mapeamentos de `DbTable`, `DbField`, `snake_case`, JSON e tipos geométricos continuam disponíveis no fluxo batch.
+
 ### Fluent Select Query Builder
 
 O `SelectQueryBuilder` permite criar consultas de seleção complexas com joins, filtros e ordenação.
@@ -329,6 +435,7 @@ var sql2 = SelectQueryBuilder.For<Usuario>()
 Isso funciona para todos os builders:
 - `SelectQueryBuilder<T>`
 - `InsertQueryBuilder<T>`
+- `InsertBatchQueryBuilder<T>`
 - `UpdateQueryBuilder<T>`
 - `DeleteQueryBuilder<T>`
 

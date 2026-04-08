@@ -1,18 +1,18 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.Data;
+using System.Reflection;
 using System.Text.Json;
 using System.Threading.Tasks;
-using System.Reflection;
-using MySqlConnector;
 using Jovemnf.MySQL.Geometry;
+using MySqlConnector;
 
 namespace Jovemnf.MySQL.Builder;
 
 public class InsertQueryBuilder
 {
-    protected string _tableName;
-    private Dictionary<string, object> _fields = new Dictionary<string, object>();
+    private string _tableName;
+    private readonly Dictionary<string, object> _fields = new();
     private int _paramCounter = 0;
 
     public static InsertQueryBuilder For<T>() => new InsertQueryBuilder<T>();
@@ -87,7 +87,7 @@ public class InsertQueryBuilder
         if (string.IsNullOrEmpty(_tableName))
             throw new InvalidOperationException("Tabela não especificada");
         var command = new MySqlCommand();
-        command.Parameters.AddWithValue("@p0", id);
+        AddParameter(command, "p0", id);
         var sql = $"SELECT * FROM `{EscapeIdentifier(_tableName)}` WHERE `id` = @p0";
         command.CommandText = sql;
         return (sql, command);
@@ -195,30 +195,31 @@ public class InsertQueryBuilder
             throw new InvalidOperationException("Nenhum campo para inserir");
 
         var command = new MySqlCommand();
-        var columnNames = new List<string>();
-        var paramNames = new List<string>();
+        var columnNames = new List<string>(_fields.Count);
+        var paramNames = new List<string>(_fields.Count);
 
         foreach (var field in _fields)
         {
-            var paramName = $"p{_paramCounter++}";
-            columnNames.Add($"`{EscapeIdentifier(field.Key)}`");
+            var paramName = GetNextParamName();
+            var escapedField = EscapeIdentifier(field.Key);
+            columnNames.Add($"`{escapedField}`");
             
             if (field.Value is PointValue pointValue)
             {
                 // Use ST_GeomFromWKB for POINT values
                 paramNames.Add($"ST_GeomFromWKB(@{paramName}, {pointValue.Point.SRID})");
-                command.Parameters.AddWithValue($"@{paramName}", pointValue.Point.ToWKB());
+                AddParameter(command, paramName, pointValue.Point.ToWKB());
             }
             else if (field.Value is PolygonValue polygonValue)
             {
                 // Use ST_PolygonFromText for POLYGON values
                 paramNames.Add($"ST_PolygonFromText(@{paramName}, {polygonValue.Polygon.SRID})");
-                command.Parameters.AddWithValue($"@{paramName}", polygonValue.Polygon.ToWKT());
+                AddParameter(command, paramName, polygonValue.Polygon.ToWKT());
             }
             else
             {
                 paramNames.Add($"@{paramName}");
-                command.Parameters.AddWithValue($"@{paramName}", field.Value ?? DBNull.Value);
+                AddParameter(command, paramName, field.Value);
             }
         }
 
@@ -239,24 +240,85 @@ public class InsertQueryBuilder
         return Build().Sql;
     }
 
-    // Helper class to mark Point values for special handling
-    private class PointValue
+    private string GetNextParamName() => $"p{_paramCounter++}";
+
+    private static void AddParameter(MySqlCommand command, string paramName, object value)
     {
-        public Point Point { get; }
-        public PointValue(Point point) => Point = point;
+        var parameter = new MySqlParameter($"@{paramName}", value ?? DBNull.Value);
+
+        switch (value)
+        {
+            case string:
+                parameter.DbType = DbType.String;
+                break;
+            case byte[]:
+                parameter.DbType = DbType.Binary;
+                break;
+            case bool:
+                parameter.DbType = DbType.Boolean;
+                break;
+            case byte:
+                parameter.DbType = DbType.Byte;
+                break;
+            case sbyte:
+                parameter.DbType = DbType.SByte;
+                break;
+            case short:
+                parameter.DbType = DbType.Int16;
+                break;
+            case ushort:
+                parameter.DbType = DbType.UInt16;
+                break;
+            case int:
+                parameter.DbType = DbType.Int32;
+                break;
+            case uint:
+                parameter.DbType = DbType.UInt32;
+                break;
+            case long:
+                parameter.DbType = DbType.Int64;
+                break;
+            case ulong:
+                parameter.DbType = DbType.UInt64;
+                break;
+            case float:
+                parameter.DbType = DbType.Single;
+                break;
+            case double:
+                parameter.DbType = DbType.Double;
+                break;
+            case decimal:
+                parameter.DbType = DbType.Decimal;
+                break;
+            case DateTime:
+                parameter.DbType = DbType.DateTime;
+                break;
+            case Guid:
+                parameter.DbType = DbType.Guid;
+                break;
+        }
+
+        command.Parameters.Add(parameter);
+    }
+
+    // Helper class to mark Point values for special handling
+    private class PointValue(Point point)
+    {
+        public Point Point { get; } = point;
     }
 
     // Helper class to mark Polygon values for special handling
-    private class PolygonValue
+    private class PolygonValue(Polygon polygon)
     {
-        public Polygon Polygon { get; }
-        public PolygonValue(Polygon polygon) => Polygon = polygon;
+        public Polygon Polygon { get; } = polygon;
     }
 }
 
 public class InsertQueryBuilder<T> : InsertQueryBuilder
 {
-    private static readonly Dictionary<string, string> _fieldMapping = CreateFieldMapping();
+    private static readonly Dictionary<string, string> FieldMapping = CreateFieldMapping();
+    private static readonly string ResolvedTableName = GetTableName<T>();
+    private static readonly PropertyColumnMapping[] InsertableProperties = CreateInsertableProperties();
 
     private static Dictionary<string, string> CreateFieldMapping()
     {
@@ -272,35 +334,55 @@ public class InsertQueryBuilder<T> : InsertQueryBuilder
         return mapping;
     }
 
+    private static PropertyColumnMapping[] CreateInsertableProperties()
+    {
+        var properties = typeof(T).GetProperties();
+        var mappings = new List<PropertyColumnMapping>(properties.Length);
+
+        foreach (var property in properties)
+        {
+            if (property.GetCustomAttribute<IgnoreToDictionaryAttribute>(true) != null)
+                continue;
+
+            var attr = property.GetCustomAttribute<DbFieldAttribute>(true);
+            var columnName = attr?.Name ?? property.Name.ToSnakeCase();
+            mappings.Add(new PropertyColumnMapping(property, columnName));
+        }
+
+        return mappings.ToArray();
+    }
+
     public InsertQueryBuilder()
     {
-        Table(GetTableName<T>());
+        Table(ResolvedTableName);
     }
 
     public InsertQueryBuilder<T> ValuesFrom(T entity)
     {
         if (entity == null) throw new ArgumentNullException(nameof(entity));
 
-        foreach (var p in typeof(T).GetProperties())
+        foreach (var mapping in InsertableProperties)
         {
-            if (p.GetCustomAttribute<IgnoreToDictionaryAttribute>(true) != null)
-                continue;
-
-            var value = p.GetValue(entity);
+            var value = mapping.Property.GetValue(entity);
             if (value == null) continue;
 
-            var columnName = _fieldMapping.TryGetValue(p.Name, out var col) ? col : p.Name;
-            Value(columnName, value);
+            Value(mapping.ColumnName, value);
         }
         return this;
     }
 
     protected override string ResolveField(string field)
     {
-        if (_fieldMapping.TryGetValue(field, out var columnName))
+        if (FieldMapping.TryGetValue(field, out var columnName))
             return columnName;
             
         return field.ToSnakeCase();
+    }
+
+    private sealed class PropertyColumnMapping(PropertyInfo property, string columnName)
+    {
+        public PropertyInfo Property { get; } = property;
+        public string ColumnName { get; } = columnName;
     }
 }
 
@@ -322,44 +404,42 @@ public class InsertQueryExecutor
 
     public async Task<long> ExecuteAsync(InsertQueryBuilder builder, bool lastID = true)
     {
-        var (sql, command) = builder.Build();
-        command.Connection = _connection;
-        
-        if (_transaction != null)
-            command.Transaction = _transaction;
-
-        await command.ExecuteNonQueryAsync();
-
-        if (lastID)
+        var (_, command) = builder.Build();
+        await using (command)
         {
-            using (var idCmd = new MySqlCommand("SELECT LAST_INSERT_ID()", _connection))
-            {
-                if (_transaction != null) idCmd.Transaction = _transaction;
-                return Convert.ToInt64(await idCmd.ExecuteScalarAsync());
-            }
+            command.Connection = _connection;
+            
+            if (_transaction != null)
+                command.Transaction = _transaction;
+
+            await command.ExecuteNonQueryAsync();
         }
-        return 0;
+
+        if (!lastID) return 0;
+        await using (var idCmd = new MySqlCommand("SELECT LAST_INSERT_ID()", _connection))
+        {
+            if (_transaction != null) idCmd.Transaction = _transaction;
+            return Convert.ToInt64(await idCmd.ExecuteScalarAsync());
+        }
     }
 
     public long Execute(InsertQueryBuilder builder, bool lastID = true)
     {
-        var (sql, command) = builder.Build();
-        command.Connection = _connection;
-        
-        if (_transaction != null)
-            command.Transaction = _transaction;
-
-        command.ExecuteNonQuery();
-
-        if (lastID)
+        var (_, command) = builder.Build();
+        using (command)
         {
-            using (var idCmd = new MySqlCommand("SELECT LAST_INSERT_ID()", _connection))
-            {
-                if (_transaction != null) idCmd.Transaction = _transaction;
-                return Convert.ToInt64(idCmd.ExecuteScalar());
-            }
+            command.Connection = _connection;
+            
+            if (_transaction != null)
+                command.Transaction = _transaction;
+
+            command.ExecuteNonQuery();
         }
-        return 0;
+
+        if (!lastID) return 0;
+        using var idCmd = new MySqlCommand("SELECT LAST_INSERT_ID()", _connection);
+        if (_transaction != null) idCmd.Transaction = _transaction;
+        return Convert.ToInt64(idCmd.ExecuteScalar());
     }
 }
 

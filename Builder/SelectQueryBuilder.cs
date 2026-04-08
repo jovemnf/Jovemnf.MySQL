@@ -1,15 +1,17 @@
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
-using System.Threading.Tasks;
 using System.Reflection;
+using System.Text;
+using System.Threading.Tasks;
 using MySqlConnector;
 
 namespace Jovemnf.MySQL.Builder;
 
 public class SelectQueryBuilder
 {
-    protected string _tableName;
+    private string _tableName;
 
     public static SelectQueryBuilder For<T>() => new SelectQueryBuilder<T>();
     private List<SelectionField> _fields = new List<SelectionField>();
@@ -19,6 +21,14 @@ public class SelectQueryBuilder
     private int? _limit;
     private int? _offset;
     private int _paramCounter = 0;
+    private static readonly HashSet<string> _allowedJoinTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "INNER", "LEFT", "RIGHT"
+    };
+    private static readonly HashSet<string> _allowedOrderDirections = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "ASC", "DESC"
+    };
 
     private static readonly HashSet<string> _allowedOperators = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
@@ -47,6 +57,22 @@ public class SelectQueryBuilder
             throw new ArgumentException($"Operador não permitido: {op}");
         }
     }
+
+    private void ValidateJoinType(string type)
+    {
+        if (!_allowedJoinTypes.Contains(type))
+        {
+            throw new ArgumentException($"Tipo de JOIN não permitido: {type}");
+        }
+    }
+
+    private void ValidateOrderDirection(string direction)
+    {
+        if (!_allowedOrderDirections.Contains(direction))
+        {
+            throw new ArgumentException($"Direção de ordenação não permitida: {direction}");
+        }
+    }
     
     public Task ExecuteAsync(MySQL connection)
     {
@@ -72,7 +98,11 @@ public class SelectQueryBuilder
 
     public SelectQueryBuilder Select(params string[] fields)
     {
-        _fields.AddRange(fields.Select(f => new SelectionField { Name = ResolveField(f), IsRaw = false }));
+        foreach (var field in fields)
+        {
+            _fields.Add(new SelectionField { Name = ResolveField(field), IsRaw = false });
+        }
+
         return this;
     }
 
@@ -100,13 +130,16 @@ public class SelectQueryBuilder
 
     public SelectQueryBuilder Join(string table, string first, string op, string second, string type = "INNER")
     {
+        ValidateOperator(op);
+        ValidateJoinType(type);
+
         _joins.Add(new JoinClause 
         { 
             Table = table, 
             First = first.Contains(".") ? first : ResolveField(first), 
             Operator = op, 
             Second = second.Contains(".") ? second : ResolveField(second), 
-            Type = type 
+            Type = type.ToUpperInvariant()
         });
         return this;
     }
@@ -142,13 +175,13 @@ public class SelectQueryBuilder
 
     public SelectQueryBuilder WhereIn<T>(string field, IEnumerable<T> values)
     {
-        _whereConditions.Add(new WhereCondition { Field = ResolveField(field), Values = values.Cast<object>().ToList(), Operator = "IN", Logic = "AND" });
+        _whereConditions.Add(new WhereCondition { Field = ResolveField(field), Values = MaterializeValues(values), Operator = "IN", Logic = "AND" });
         return this;
     }
 
     public SelectQueryBuilder WhereNotIn<T>(string field, IEnumerable<T> values)
     {
-        _whereConditions.Add(new WhereCondition { Field = ResolveField(field), Values = values.Cast<object>().ToList(), Operator = "NOT IN", Logic = "AND" });
+        _whereConditions.Add(new WhereCondition { Field = ResolveField(field), Values = MaterializeValues(values), Operator = "NOT IN", Logic = "AND" });
         return this;
     }
 
@@ -178,12 +211,18 @@ public class SelectQueryBuilder
 
     public SelectQueryBuilder OrderBy(string field, string direction = "ASC")
     {
-        _orderBys.Add($"{EscapeIdentifier(ResolveField(field))} {direction.ToUpper()}");
+        ValidateOrderDirection(direction);
+        _orderBys.Add($"{EscapeIdentifier(ResolveField(field))} {direction.ToUpperInvariant()}");
         return this;
     }
 
     public SelectQueryBuilder Limit(int limit, int offset = 0)
     {
+        if (limit < 0)
+            throw new ArgumentOutOfRangeException(nameof(limit), "O limite não pode ser negativo.");
+        if (offset < 0)
+            throw new ArgumentOutOfRangeException(nameof(offset), "O offset não pode ser negativo.");
+
         _limit = limit;
         _offset = offset;
         return this;
@@ -196,22 +235,32 @@ public class SelectQueryBuilder
             throw new InvalidOperationException("Nome da tabela não definido");
 
         var command = new MySqlCommand();
-        var selection = _fields.Count > 0 
-            ? string.Join(", ", _fields.Select(f => f.IsRaw ? f.Name : EscapeIdentifier(f.Name))) 
-            : "*";
-        
-        var sql = $"SELECT {selection} FROM {EscapeIdentifier(_tableName)}";
+        var selection = BuildSelectionClause();
+        var sqlBuilder = new StringBuilder();
+        sqlBuilder.Append("SELECT ");
+        sqlBuilder.Append(selection);
+        sqlBuilder.Append(" FROM ");
+        sqlBuilder.Append(EscapeIdentifier(_tableName));
 
         // JOINS
         foreach (var join in _joins)
         {
-            sql += $" {join.Type} JOIN {EscapeIdentifier(join.Table)} ON {EscapeIdentifier(join.First)} {join.Operator} {EscapeIdentifier(join.Second)}";
+            sqlBuilder.Append(' ');
+            sqlBuilder.Append(join.Type);
+            sqlBuilder.Append(" JOIN ");
+            sqlBuilder.Append(EscapeIdentifier(join.Table));
+            sqlBuilder.Append(" ON ");
+            sqlBuilder.Append(EscapeIdentifier(join.First));
+            sqlBuilder.Append(' ');
+            sqlBuilder.Append(join.Operator);
+            sqlBuilder.Append(' ');
+            sqlBuilder.Append(EscapeIdentifier(join.Second));
         }
 
         // WHERE
         if (_whereConditions.Count > 0)
         {
-            var whereClauses = new List<string>();
+            var whereClauses = new List<string>(_whereConditions.Count);
             for (int i = 0; i < _whereConditions.Count; i++)
             {
                 var condition = _whereConditions[i];
@@ -220,25 +269,30 @@ public class SelectQueryBuilder
                 if (i > 0) whereClauses.Add($"{logic} {clause}");
                 else whereClauses.Add(clause);
             }
-            sql += $" WHERE {string.Join(" ", whereClauses)}";
+            sqlBuilder.Append(" WHERE ");
+            sqlBuilder.Append(string.Join(" ", whereClauses));
         }
 
         // ORDER BY
         if (_orderBys.Count > 0)
         {
-            sql += $" ORDER BY {string.Join(", ", _orderBys)}";
+            sqlBuilder.Append(" ORDER BY ");
+            sqlBuilder.Append(string.Join(", ", _orderBys));
         }
 
         // LIMIT
         if (_limit.HasValue)
         {
-            sql += $" LIMIT {_limit.Value}";
+            sqlBuilder.Append(" LIMIT ");
+            sqlBuilder.Append(_limit.Value);
             if (_offset.HasValue && _offset.Value > 0)
             {
-                sql += $" OFFSET {_offset.Value}";
+                sqlBuilder.Append(" OFFSET ");
+                sqlBuilder.Append(_offset.Value);
             }
         }
 
+        var sql = sqlBuilder.ToString();
         command.CommandText = sql;
         return (sql, command);
     }
@@ -261,47 +315,149 @@ public class SelectQueryBuilder
             string sql = condition.RawSql;
             if (condition.RawParameters != null)
             {
-                foreach (var param in condition.RawParameters)
+                for (int i = 0; i < condition.RawParameters.Length; i++)
                 {
                     var pName = GetNextParamName();
-                    command.Parameters.AddWithValue($"@{pName}", param ?? DBNull.Value);
+                    var parameterName = $"@{pName}";
+                    sql = sql.Replace("{" + i + "}", parameterName);
+                    sql = sql.Replace($"@p{i}", parameterName);
+                    AddParameter(command, pName, condition.RawParameters[i]);
                 }
             }
             return sql;
         }
 
+        var escapedField = EscapeIdentifier(condition.Field);
+
         switch (condition.Operator)
         {
             case "IS NULL":
             case "IS NOT NULL":
-                return $"{EscapeIdentifier(condition.Field)} {condition.Operator}";
+                return $"{escapedField} {condition.Operator}";
 
             case "IN":
             case "NOT IN":
-                var inParams = new List<string>();
+                var inParams = new List<string>(condition.Values.Count);
                 foreach (var val in condition.Values)
                 {
                     var name = GetNextParamName();
                     inParams.Add($"@{name}");
-                    command.Parameters.AddWithValue($"@{name}", val ?? DBNull.Value);
+                    AddParameter(command, name, val);
                 }
-                return $"{EscapeIdentifier(condition.Field)} {condition.Operator} ({string.Join(", ", inParams)})";
+                return $"{escapedField} {condition.Operator} ({string.Join(", ", inParams)})";
 
             case "BETWEEN":
                 var start = GetNextParamName();
                 var end = GetNextParamName();
-                command.Parameters.AddWithValue($"@{start}", condition.Value ?? DBNull.Value);
-                command.Parameters.AddWithValue($"@{end}", condition.SecondValue ?? DBNull.Value);
-                return $"{EscapeIdentifier(condition.Field)} BETWEEN @{start} AND @{end}";
+                AddParameter(command, start, condition.Value);
+                AddParameter(command, end, condition.SecondValue);
+                return $"{escapedField} BETWEEN @{start} AND @{end}";
 
             default:
                 var pName = GetNextParamName();
-                command.Parameters.AddWithValue($"@{pName}", condition.Value ?? DBNull.Value);
-                return $"{EscapeIdentifier(condition.Field)} {condition.Operator} @{pName}";
+                AddParameter(command, pName, condition.Value);
+                return $"{escapedField} {condition.Operator} @{pName}";
         }
     }
 
     private string GetNextParamName() => $"p{_paramCounter++}";
+
+    private string BuildSelectionClause()
+    {
+        if (_fields.Count == 0)
+            return "*";
+
+        var selections = new List<string>(_fields.Count);
+        foreach (var field in _fields)
+        {
+            selections.Add(field.IsRaw ? field.Name : EscapeIdentifier(field.Name));
+        }
+
+        return string.Join(", ", selections);
+    }
+
+    private static List<object> MaterializeValues<T>(IEnumerable<T> values)
+    {
+        ArgumentNullException.ThrowIfNull(values);
+
+        if (values is ICollection<T> collection)
+        {
+            var result = new List<object>(collection.Count);
+            foreach (var value in collection)
+            {
+                result.Add(value);
+            }
+
+            return result;
+        }
+
+        var list = new List<object>();
+        foreach (var value in values)
+        {
+            list.Add(value);
+        }
+
+        return list;
+    }
+
+    private static void AddParameter(MySqlCommand command, string paramName, object value)
+    {
+        var parameter = new MySqlParameter($"@{paramName}", value ?? DBNull.Value);
+
+        switch (value)
+        {
+            case string:
+                parameter.DbType = DbType.String;
+                break;
+            case byte[]:
+                parameter.DbType = DbType.Binary;
+                break;
+            case bool:
+                parameter.DbType = DbType.Boolean;
+                break;
+            case byte:
+                parameter.DbType = DbType.Byte;
+                break;
+            case sbyte:
+                parameter.DbType = DbType.SByte;
+                break;
+            case short:
+                parameter.DbType = DbType.Int16;
+                break;
+            case ushort:
+                parameter.DbType = DbType.UInt16;
+                break;
+            case int:
+                parameter.DbType = DbType.Int32;
+                break;
+            case uint:
+                parameter.DbType = DbType.UInt32;
+                break;
+            case long:
+                parameter.DbType = DbType.Int64;
+                break;
+            case ulong:
+                parameter.DbType = DbType.UInt64;
+                break;
+            case float:
+                parameter.DbType = DbType.Single;
+                break;
+            case double:
+                parameter.DbType = DbType.Double;
+                break;
+            case decimal:
+                parameter.DbType = DbType.Decimal;
+                break;
+            case DateTime:
+                parameter.DbType = DbType.DateTime;
+                break;
+            case Guid:
+                parameter.DbType = DbType.Guid;
+                break;
+        }
+
+        command.Parameters.Add(parameter);
+    }
 
     private class SelectionField
     {
@@ -337,6 +493,7 @@ public class SelectQueryBuilder
 public class SelectQueryBuilder<T> : SelectQueryBuilder
 {
     private static readonly Dictionary<string, string> _fieldMapping = CreateFieldMapping();
+    private static readonly string _resolvedTableName = GetTableName<T>();
 
     private static Dictionary<string, string> CreateFieldMapping()
     {
@@ -354,7 +511,7 @@ public class SelectQueryBuilder<T> : SelectQueryBuilder
 
     public SelectQueryBuilder()
     {
-        Table(GetTableName<T>());
+        Table(_resolvedTableName);
     }
 
     protected override string ResolveField(string field)

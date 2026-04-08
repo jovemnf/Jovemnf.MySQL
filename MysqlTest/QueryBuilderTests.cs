@@ -178,6 +178,70 @@ public class QueryBuilderTests
     }
 
     [Fact]
+    public void TestWhereRawAfterWhere_RewritesParameterNames()
+    {
+        var builder = new SelectQueryBuilder()
+            .Table("usuarios")
+            .Where("ativo", true)
+            .WhereRaw("nome = AES_ENCRYPT(@p0, 'key')", "Joao");
+
+        var (sql, command) = builder.Build();
+
+        Assert.Contains("`ativo` = @p0", sql);
+        Assert.Contains("AND nome = AES_ENCRYPT(@p1, 'key')", sql);
+        Assert.Equal(2, command.Parameters.Count);
+        Assert.Equal(true, command.Parameters["@p0"].Value);
+        Assert.Equal("Joao", command.Parameters["@p1"].Value);
+    }
+
+    [Fact]
+    public void TestWhereRawWithPositionalPlaceholders()
+    {
+        var builder = new SelectQueryBuilder()
+            .Table("usuarios")
+            .WhereRaw("nome = {0} AND status = {1}", "Joao", "ativo");
+
+        var (sql, command) = builder.Build();
+
+        Assert.Contains("WHERE nome = @p0 AND status = @p1", sql);
+        Assert.Equal(2, command.Parameters.Count);
+        Assert.Equal("Joao", command.Parameters["@p0"].Value);
+        Assert.Equal("ativo", command.Parameters["@p1"].Value);
+    }
+
+    [Fact]
+    public void TestOrderBy_ThrowsForInvalidDirection()
+    {
+        var ex = Assert.Throws<ArgumentException>(() =>
+            new SelectQueryBuilder()
+                .Table("logs")
+                .OrderBy("date", "SIDEWAYS"));
+
+        Assert.Contains("Direção de ordenação", ex.Message);
+    }
+
+    [Fact]
+    public void TestJoin_ThrowsForInvalidType()
+    {
+        var ex = Assert.Throws<ArgumentException>(() =>
+            new SelectQueryBuilder()
+                .From("orders")
+                .Join("customers", "customer_id", "=", "customers.id", "OUTER"));
+
+        Assert.Contains("Tipo de JOIN", ex.Message);
+    }
+
+    [Fact]
+    public void TestLimit_ThrowsForNegativeValues()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new SelectQueryBuilder().Limit(-1));
+
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new SelectQueryBuilder().Limit(10, -1));
+    }
+
+    [Fact]
     public void TestSelectMixedNormalAndRaw()
     {
         var builder = new SelectQueryBuilder()
