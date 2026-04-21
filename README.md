@@ -239,6 +239,36 @@ using (var mysql = new MySQL(config))
 }
 ```
 
+#### `Distinct`, `GroupBy` e `Having`
+
+Para cenários de agregação, o builder agora suporta `Distinct()`, `GroupBy(...)`, `Having(...)`, `HavingRaw(...)`, `OrHaving(...)` e `OrHavingRaw(...)`.
+
+```csharp
+var builder = new SelectQueryBuilder()
+    .Distinct()
+    .Select("status")
+    .SelectRaw("COUNT(*) AS total")
+    .From("rastreamento_eventos")
+    .Where("ativo", true, QueryOperator.Equals)
+    .GroupBy("status")
+    .Having("status", "cancelado", QueryOperator.NotEquals)
+    .OrHavingRaw("COUNT(*) > {0}", 10)
+    .OrderBy("status");
+```
+
+SQL gerada:
+
+```sql
+SELECT DISTINCT `status`, COUNT(*) AS total
+FROM `rastreamento_eventos`
+WHERE `ativo` = @p0
+GROUP BY `status`
+HAVING `status` <> @p1 OR COUNT(*) > @p2
+ORDER BY `status` ASC
+```
+
+O `SelectQueryBuilder` também aceita `QueryOperator` em `Where(...)`, `OrWhere(...)`, `Having(...)` e `OrHaving(...)`, mantendo a mesma API tipada dos builders de `Update` e `Delete`.
+
 #### Projeção com `record` no `.Select(...)`
 
 Você também pode usar um `record` ou DTO para definir automaticamente quais colunas devem entrar no `SELECT`.

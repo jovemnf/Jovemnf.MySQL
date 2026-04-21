@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using Jovemnf.MySQL.Builder;
 using Xunit;
 
@@ -71,12 +69,63 @@ public class QueryBuilderTests
     }
 
     [Fact]
+    public void TestSelectDistinctGroupByAndHaving()
+    {
+        var builder = new SelectQueryBuilder()
+            .Distinct()
+            .Select("status")
+            .SelectRaw("COUNT(*) AS total")
+            .From("rastreamento_eventos")
+            .Where("ativo", true)
+            .GroupBy("status")
+            .Having("status", "processado", QueryOperator.NotEquals)
+            .OrHavingRaw("COUNT(*) > {0}", 10)
+            .OrderBy("status");
+
+        var (sql, command) = builder.Build();
+
+        Assert.Contains("SELECT DISTINCT `status`, COUNT(*) AS total FROM `rastreamento_eventos`", sql);
+        Assert.Contains("WHERE `ativo` = @p0", sql);
+        Assert.Contains("GROUP BY `status`", sql);
+        Assert.Contains("HAVING `status` <> @p1 OR COUNT(*) > @p2", sql);
+        Assert.Contains("ORDER BY `status` ASC", sql);
+        Assert.Equal(3, command.Parameters.Count);
+    }
+
+    [Fact]
+    public void TestSelectWhere_QueryOperator_GeneratesExpectedSql()
+    {
+        var builder = new SelectQueryBuilder()
+            .Table("logs")
+            .Where("created_at", "2024-01-01", QueryOperator.GreaterThan)
+            .OrWhere("created_at", "2023-01-01", QueryOperator.LessThanOrEqual);
+
+        var (sql, _) = builder.Build();
+
+        Assert.Contains("`created_at` > @p0", sql);
+        Assert.Contains("OR `created_at` <= @p1", sql);
+    }
+
+    [Fact]
+    public void TestHaving_ThrowsForInvalidOperator()
+    {
+        var builder = new SelectQueryBuilder()
+            .Table("users")
+            .GroupBy("status");
+
+        var ex = Assert.Throws<ArgumentException>(() =>
+            builder.Having("status", "active", "; DROP TABLE users; --"));
+
+        Assert.Contains("Operador não permitido", ex.Message);
+    }
+
+    [Fact]
     public void TestOrderBy()
     {
         var builder = new SelectQueryBuilder()
             .Table("logs")
             .OrderBy("date", "DESC")
-            .OrderBy("id", "ASC");
+            .OrderBy("id");
 
         var (sql, _) = builder.Build();
 
@@ -95,7 +144,7 @@ public class QueryBuilderTests
         };
         
         var builder = new InsertQueryBuilder().Table("clientes").Values(values);
-        var (sql, command) = builder.Build();
+        var (_, command) = builder.Build();
 
         Assert.Equal(4, command.Parameters.Count);
         Assert.Equal(DBNull.Value, command.Parameters["@p3"].Value);
@@ -355,6 +404,21 @@ public class QueryBuilderTests
 
         Assert.Contains("SELECT EXISTS(SELECT 1 FROM `orders o` INNER JOIN `customers c` ON `o`.`customer_id` = `c`.`id`", sql);
         Assert.Contains("WHERE `o`.`status` = @p0 OR `c`.`vip` = @p1 LIMIT 1)", sql);
+        Assert.Equal(2, command.Parameters.Count);
+    }
+
+    [Fact]
+    public void TestExistsQuery_WithGroupByAndHaving()
+    {
+        var builder = new SelectQueryBuilder()
+            .Table("logs")
+            .Where("active", true)
+            .GroupBy("status")
+            .HavingRaw("COUNT(*) > {0}", 5);
+
+        var (sql, command) = builder.BuildExists();
+
+        Assert.Equal("SELECT EXISTS(SELECT 1 FROM `logs` WHERE `active` = @p0 GROUP BY `status` HAVING COUNT(*) > @p1 LIMIT 1)", sql);
         Assert.Equal(2, command.Parameters.Count);
     }
 

@@ -20,10 +20,13 @@ public class SelectQueryBuilder
     private List<SelectionField> _fields = new List<SelectionField>();
     private List<JoinClause> _joins = new List<JoinClause>();
     private List<WhereCondition> _whereConditions = new List<WhereCondition>();
+    private List<WhereCondition> _havingConditions = new List<WhereCondition>();
+    private List<string> _groupBys = new List<string>();
     private List<string> _orderBys = new List<string>();
     private int? _limit;
     private int? _offset;
     private int _paramCounter = 0;
+    private bool _distinct;
     private static readonly HashSet<string> _allowedJoinTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
         "INNER", "LEFT", "RIGHT"
@@ -154,6 +157,12 @@ public class SelectQueryBuilder
         return this;
     }
 
+    public SelectQueryBuilder Distinct()
+    {
+        _distinct = true;
+        return this;
+    }
+
     public SelectQueryBuilder Count(string field = "*")
     {
         _fields.Clear();
@@ -196,6 +205,11 @@ public class SelectQueryBuilder
         return this;
     }
 
+    public SelectQueryBuilder Where(string field, object value, QueryOperator op)
+    {
+        return Where(field, value, op.ToSqlString());
+    }
+
     public SelectQueryBuilder WhereRaw(string sql, params object[] parameters)
     {
         _whereConditions.Add(new WhereCondition { RawSql = sql, RawParameters = parameters, Operator = "RAW", Logic = "AND" });
@@ -207,6 +221,11 @@ public class SelectQueryBuilder
         ValidateOperator(op);
         _whereConditions.Add(new WhereCondition { Field = ResolveField(field), Value = value, Operator = op, Logic = "OR" });
         return this;
+    }
+
+    public SelectQueryBuilder OrWhere(string field, object value, QueryOperator op)
+    {
+        return OrWhere(field, value, op.ToSqlString());
     }
 
     public SelectQueryBuilder OrWhereRaw(string sql, params object[] parameters)
@@ -258,6 +277,52 @@ public class SelectQueryBuilder
         return this;
     }
 
+    public SelectQueryBuilder GroupBy(params string[] fields)
+    {
+        foreach (var field in fields)
+        {
+            _groupBys.Add(ResolveField(field));
+        }
+
+        return this;
+    }
+
+    public SelectQueryBuilder Having(string field, object value, string op = "=")
+    {
+        ValidateOperator(op);
+        _havingConditions.Add(new WhereCondition { Field = ResolveField(field), Value = value, Operator = op, Logic = "AND" });
+        return this;
+    }
+
+    public SelectQueryBuilder Having(string field, object value, QueryOperator op)
+    {
+        return Having(field, value, op.ToSqlString());
+    }
+
+    public SelectQueryBuilder HavingRaw(string sql, params object[] parameters)
+    {
+        _havingConditions.Add(new WhereCondition { RawSql = sql, RawParameters = parameters, Operator = "RAW", Logic = "AND" });
+        return this;
+    }
+
+    public SelectQueryBuilder OrHaving(string field, object value, string op = "=")
+    {
+        ValidateOperator(op);
+        _havingConditions.Add(new WhereCondition { Field = ResolveField(field), Value = value, Operator = op, Logic = "OR" });
+        return this;
+    }
+
+    public SelectQueryBuilder OrHaving(string field, object value, QueryOperator op)
+    {
+        return OrHaving(field, value, op.ToSqlString());
+    }
+
+    public SelectQueryBuilder OrHavingRaw(string sql, params object[] parameters)
+    {
+        _havingConditions.Add(new WhereCondition { RawSql = sql, RawParameters = parameters, Operator = "RAW", Logic = "OR" });
+        return this;
+    }
+
     public SelectQueryBuilder Limit(int limit, int offset = 0)
     {
         if (limit < 0)
@@ -289,6 +354,7 @@ public class SelectQueryBuilder
         sqlBuilder.Append("SELECT EXISTS(SELECT 1 FROM ");
         sqlBuilder.Append(EscapeIdentifier(_tableName));
         AppendJoinsAndWhere(sqlBuilder, command);
+        AppendGroupByAndHaving(sqlBuilder, command);
         sqlBuilder.Append(" LIMIT 1)");
 
         var sql = sqlBuilder.ToString();
@@ -434,10 +500,15 @@ public class SelectQueryBuilder
         var command = new MySqlCommand();
         var sqlBuilder = new StringBuilder();
         sqlBuilder.Append("SELECT ");
+        if (_distinct)
+        {
+            sqlBuilder.Append("DISTINCT ");
+        }
         sqlBuilder.Append(selection);
         sqlBuilder.Append(" FROM ");
         sqlBuilder.Append(EscapeIdentifier(_tableName));
         AppendJoinsAndWhere(sqlBuilder, command);
+        AppendGroupByAndHaving(sqlBuilder, command);
 
         if (includeOrderBy && _orderBys.Count > 0)
         {
@@ -493,6 +564,33 @@ public class SelectQueryBuilder
 
             sqlBuilder.Append(" WHERE ");
             sqlBuilder.Append(string.Join(" ", whereClauses));
+        }
+    }
+
+    private void AppendGroupByAndHaving(StringBuilder sqlBuilder, MySqlCommand command)
+    {
+        if (_groupBys.Count > 0)
+        {
+            sqlBuilder.Append(" GROUP BY ");
+            sqlBuilder.Append(string.Join(", ", _groupBys.Select(EscapeIdentifier)));
+        }
+
+        if (_havingConditions.Count > 0)
+        {
+            var havingClauses = new List<string>(_havingConditions.Count);
+            for (int i = 0; i < _havingConditions.Count; i++)
+            {
+                var condition = _havingConditions[i];
+                var logic = i > 0 ? condition.Logic : "";
+                string clause = BuildWhereClause(condition, command);
+                if (i > 0)
+                    havingClauses.Add($"{logic} {clause}");
+                else
+                    havingClauses.Add(clause);
+            }
+
+            sqlBuilder.Append(" HAVING ");
+            sqlBuilder.Append(string.Join(" ", havingClauses));
         }
     }
 

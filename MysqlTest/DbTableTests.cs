@@ -160,6 +160,18 @@ public class DbTableTests
         Assert.Contains("SELECT `real_column`", sql);
         Assert.Contains("ORDER BY `real_column` ASC", sql);
     }
+
+    [Fact]
+    public void SelectQueryBuilder_Generic_MapsGroupByAndHaving()
+    {
+        var sql = SelectQueryBuilder.For<TestModelWithDbField>()
+            .GroupBy("PropertyName")
+            .Having("PropertyName", "valor")
+            .ToString();
+
+        Assert.Contains("GROUP BY `real_column`", sql);
+        Assert.Contains("HAVING `real_column` = @p0", sql);
+    }
 }
 
 [DbTable("mapped_table")]
