@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 using Jovemnf.MySQL;
 using MysqlTest.Fakes;
 using Xunit;
@@ -14,6 +15,14 @@ public class TestModel
     public double Salario { get; set; }
     public DateTime DataNascimento { get; set; }
     public int? NullableInt { get; set; }
+}
+
+[DbTable("veiculos")]
+public struct StructTestModel
+{
+    public int Id { get; set; }
+    public string Nome { get; set; }
+    public bool Ativo { get; set; }
 }
 
 public class MappingTests
@@ -98,6 +107,29 @@ public class MappingTests
     }
 
     [Fact]
+    public void TestToModel_StructMapping()
+    {
+        var data = new List<Dictionary<string, object>>
+        {
+            new Dictionary<string, object>
+            {
+                { "id", 77 },
+                { "nome", "Veiculo Teste" },
+                { "ativo", 1 }
+            }
+        };
+
+        using var reader = new MySQLReader(new FakeDataReader(data));
+        reader.Read();
+
+        var model = reader.ToModel<StructTestModel>();
+
+        Assert.Equal(77, model.Id);
+        Assert.Equal("Veiculo Teste", model.Nome);
+        Assert.True(model.Ativo);
+    }
+
+    [Fact]
     public void TestToModel_NumericMapping()
     {
         var guid = Guid.NewGuid();
@@ -130,6 +162,52 @@ public class MappingTests
         Assert.Equal(255, model.ByteVal);
         Assert.Equal(guid, model.GuidVal);
     }
+
+    [Fact]
+    public void TestToModel_RecordConstructorMapping_WithJsonPropertyName()
+    {
+        var data = new List<Dictionary<string, object>>
+        {
+            new Dictionary<string, object>
+            {
+                { "uuid", "veh-1" },
+                { "placa", "ABC1234" },
+                { "nome_portal", "Caminhao 01" }
+            }
+        };
+
+        using var reader = new MySQLReader(new FakeDataReader(data));
+        reader.Read();
+
+        var model = reader.ToModel<VehicleSelectionRecord>();
+
+        Assert.Equal("veh-1", model.Uuid);
+        Assert.Equal("ABC1234", model.Placa);
+        Assert.Equal("Caminhao 01", model.NomePortal);
+    }
+
+    [Fact]
+    public async Task TestToModelListAsync_RecordConstructorMapping()
+    {
+        var data = new List<Dictionary<string, object>>
+        {
+            new Dictionary<string, object>
+            {
+                { "uuid", "veh-1" },
+                { "placa", "ABC1234" },
+                { "nome_portal", "Caminhao 01" }
+            }
+        };
+
+        using var reader = new MySQLReader(new FakeDataReader(data));
+
+        var list = await reader.ToModelListAsync<VehicleSelectionRecord>();
+
+        var model = Assert.Single(list);
+        Assert.Equal("veh-1", model.Uuid);
+        Assert.Equal("ABC1234", model.Placa);
+        Assert.Equal("Caminhao 01", model.NomePortal);
+    }
 }
 
 public class ModelWithAttributes
@@ -160,6 +238,28 @@ public class Boleto
     public string Descricao { get; set; } = null!;
 }
 
+public record BoletoConsultaRecord(int IdEmpresa, string Descricao);
+
+public record BoletoConsultaComAtributoRecord
+{
+    [DbField("id_empresa")]
+    public int EmpresaId { get; init; }
+
+    public string Descricao { get; init; } = null!;
+}
+
+public record BoletoConsultaSnakeCaseFallbackRecord(string NomePortal);
+
+public record VehicleListItemJsonRecord(
+    [property: JsonPropertyName("uuid")] string? Uuid,
+    [property: JsonPropertyName("placa")] string? Placa,
+    [property: JsonPropertyName("nome_portal")] string? NomePortal);
+
+public record VehicleSelectionRecord(
+    [property: JsonPropertyName("uuid")] string? Uuid,
+    [property: JsonPropertyName("placa")] string? Placa,
+    [property: JsonPropertyName("nome_portal")] string? NomePortal);
+
 public class QueryBuilderMappingTests
 {
     [Fact]
@@ -181,5 +281,65 @@ public class QueryBuilderMappingTests
             .ToString();
 
         Assert.Contains("`id_empresa` =", sql);
+    }
+
+    [Fact]
+    public void TestSelectQueryBuilder_SelectsFieldsFromRecordInstance()
+    {
+        var sql = Jovemnf.MySQL.Builder.SelectQueryBuilder.For<Boleto>()
+            .Select(new BoletoConsultaRecord(0, string.Empty))
+            .ToString();
+
+        Assert.Contains("SELECT `id_empresa`, `descricao` FROM `Boleto`", sql);
+    }
+
+    [Fact]
+    public void TestSelectQueryBuilder_SelectsFieldsFromRecordType()
+    {
+        var sql = Jovemnf.MySQL.Builder.SelectQueryBuilder.For<Boleto>()
+            .Select<BoletoConsultaRecord>()
+            .ToString();
+
+        Assert.Contains("SELECT `id_empresa`, `descricao` FROM `Boleto`", sql);
+    }
+
+    [Fact]
+    public void TestSelectQueryBuilder_SelectsFieldsFromRecordTypeInstance()
+    {
+        var sql = Jovemnf.MySQL.Builder.SelectQueryBuilder.For<Boleto>()
+            .Select(typeof(BoletoConsultaRecord))
+            .ToString();
+
+        Assert.Contains("SELECT `id_empresa`, `descricao` FROM `Boleto`", sql);
+    }
+
+    [Fact]
+    public void TestSelectQueryBuilder_SelectsFieldsFromRecordUsingDbFieldAttribute()
+    {
+        var sql = Jovemnf.MySQL.Builder.SelectQueryBuilder.For<Boleto>()
+            .Select<BoletoConsultaComAtributoRecord>()
+            .ToString();
+
+        Assert.Contains("SELECT `id_empresa`, `descricao` FROM `Boleto`", sql);
+    }
+
+    [Fact]
+    public void TestSelectQueryBuilder_SelectsFieldsFromRecordUsingSnakeCaseFallback()
+    {
+        var sql = Jovemnf.MySQL.Builder.SelectQueryBuilder.For<Boleto>()
+            .Select<BoletoConsultaSnakeCaseFallbackRecord>()
+            .ToString();
+
+        Assert.Contains("SELECT `nome_portal` FROM `Boleto`", sql);
+    }
+
+    [Fact]
+    public void TestSelectQueryBuilder_SelectsFieldsFromRecordUsingJsonPropertyName()
+    {
+        var sql = Jovemnf.MySQL.Builder.SelectQueryBuilder.For<Boleto>()
+            .Select<VehicleListItemJsonRecord>()
+            .ToString();
+
+        Assert.Contains("SELECT `uuid`, `placa`, `nome_portal` FROM `Boleto`", sql);
     }
 }

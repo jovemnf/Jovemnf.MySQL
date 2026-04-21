@@ -16,8 +16,8 @@
     <RepositoryUrl>https://github.com/jovemnf/Jovemnf.MySQL.git</RepositoryUrl>
     <PackageProjectUrl>https://github.com/jovemnf/Jovemnf.MySQL/blob/master/README.md</PackageProjectUrl>
     <ReleaseVersion>0.0.28</ReleaseVersion>
-    <PackageVersion>1.0.6</PackageVersion>
-    <AssemblyVersion>1.0.6</AssemblyVersion>
+    <PackageVersion>1.0.7</PackageVersion>
+    <AssemblyVersion>1.0.7</AssemblyVersion>
   </PropertyGroup>
 
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">

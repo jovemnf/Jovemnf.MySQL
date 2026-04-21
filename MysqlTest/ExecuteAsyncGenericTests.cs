@@ -269,6 +269,44 @@ public class ExecuteAsyncGenericTests
         Assert.IsAssignableFrom<Task<List<DummyEntity>>>(task);
     }
 
+    [Fact]
+    public async Task Select_ExistsAsync_ThrowsWhenConnectionNull()
+    {
+        var builder = new SelectQueryBuilder()
+            .Table("t");
+
+        var ex = await Assert.ThrowsAsync<ArgumentNullException>(() =>
+            builder.ExistsAsync(null!));
+
+        Assert.Equal("connection", ex.ParamName);
+    }
+
+    [Fact]
+    public async Task Select_ExistsAsync_ThrowsWhenTableNull()
+    {
+        var builder = new SelectQueryBuilder();
+        await using var conn = CreateConnection();
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            builder.ExistsAsync(conn));
+
+        Assert.Equal("Tabela não especificada", ex.Message);
+    }
+
+    [Fact]
+    public void Select_ExistsAsync_ReturnsTaskOfBool()
+    {
+        var builder = new SelectQueryBuilder()
+            .Table("veiculos")
+            .Where("id", 1);
+        using var conn = CreateConnection();
+
+        var task = builder.ExistsAsync(conn);
+
+        Assert.NotNull(task);
+        Assert.IsAssignableFrom<Task<bool>>(task);
+    }
+
     // ========== Testes adicionais: BuildSelect/BuildSelectById com WHERE complexo ==========
 
     [Fact]
@@ -395,6 +433,18 @@ public class ExecuteAsyncGenericTests
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             conn.ExecuteQueryAsync<DummyEntity>(builder));
+    }
+
+    [Fact]
+    public async Task MySQL_ExecuteExistsAsync_ThrowsWhenConnectionNotOpen()
+    {
+        await using var conn = CreateConnection();
+        var builder = new SelectQueryBuilder()
+            .Table("veiculos")
+            .Where("id", 1);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            conn.ExecuteExistsAsync(builder));
     }
 
     [Fact]

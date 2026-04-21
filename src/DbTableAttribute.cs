@@ -2,7 +2,7 @@ using System;
 
 namespace Jovemnf.MySQL;
 
-[AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = true)]
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct, AllowMultiple = false, Inherited = true)]
 public sealed class DbTableAttribute : Attribute
 {
     public string Name { get; }

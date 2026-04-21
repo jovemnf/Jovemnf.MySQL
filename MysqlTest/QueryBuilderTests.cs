@@ -151,6 +151,53 @@ public class QueryBuilderTests
     }
 
     [Fact]
+    public void TestSelectToDebugSql_ReplacesBasicParameters()
+    {
+        var builder = new SelectQueryBuilder()
+            .Table("users")
+            .Where("id", 1)
+            .Where("name", "O'Brian");
+
+        var debugSql = builder.ToDebugSql();
+
+        Assert.Contains("`id` = 1", debugSql);
+        Assert.Contains("`name` = 'O''Brian'", debugSql);
+        Assert.DoesNotContain("@p0", debugSql);
+        Assert.DoesNotContain("@p1", debugSql);
+    }
+
+    [Fact]
+    public void TestSelectToDebugSql_FormatsSpecialValues()
+    {
+        var date = new DateTime(2026, 4, 20, 15, 30, 45, 123);
+        var builder = new SelectQueryBuilder()
+            .Table("logs")
+            .Where("created_at", date)
+            .Where("active", true)
+            .Where("deleted_at", null!);
+
+        var debugSql = builder.ToDebugSql();
+
+        Assert.Contains("'2026-04-20 15:30:45.1230000'", debugSql);
+        Assert.Contains("`active` = 1", debugSql);
+        Assert.Contains("`deleted_at` = NULL", debugSql);
+    }
+
+    [Fact]
+    public void TestSelectToDebugSql_ReplacesParametersInsideRawClauses()
+    {
+        var builder = new SelectQueryBuilder()
+            .Table("usuarios")
+            .Where("ativo", true)
+            .WhereRaw("nome = AES_ENCRYPT(@p0, 'key')", "Joao");
+
+        var debugSql = builder.ToDebugSql();
+
+        Assert.Contains("`ativo` = 1", debugSql);
+        Assert.Contains("AES_ENCRYPT('Joao', 'key')", debugSql);
+    }
+
+    [Fact]
     public void TestSelectRawWithAlias()
     {
         var builder = new SelectQueryBuilder()
@@ -277,6 +324,38 @@ public class QueryBuilderTests
         var (sql, _) = builder.Build();
 
         Assert.Equal("SELECT COUNT(`id`) FROM `users`", sql);
+    }
+
+    [Fact]
+    public void TestExistsQuery()
+    {
+        var builder = new SelectQueryBuilder()
+            .Table("users")
+            .Where("status", "active")
+            .OrderBy("id", "DESC")
+            .Limit(10, 20);
+
+        var (sql, command) = builder.BuildExists();
+
+        Assert.Equal("SELECT EXISTS(SELECT 1 FROM `users` WHERE `status` = @p0 LIMIT 1)", sql);
+        Assert.Single(command.Parameters);
+        Assert.Equal("active", command.Parameters["@p0"].Value);
+    }
+
+    [Fact]
+    public void TestExistsQuery_WithJoinAndMultipleWheres()
+    {
+        var builder = new SelectQueryBuilder()
+            .From("orders o")
+            .Join("customers c", "o.customer_id", "=", "c.id")
+            .Where("o.status", "open")
+            .OrWhere("c.vip", true);
+
+        var (sql, command) = builder.BuildExists();
+
+        Assert.Contains("SELECT EXISTS(SELECT 1 FROM `orders o` INNER JOIN `customers c` ON `o`.`customer_id` = `c`.`id`", sql);
+        Assert.Contains("WHERE `o`.`status` = @p0 OR `c`.`vip` = @p1 LIMIT 1)", sql);
+        Assert.Equal(2, command.Parameters.Count);
     }
 
     [Fact]

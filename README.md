@@ -239,6 +239,80 @@ using (var mysql = new MySQL(config))
 }
 ```
 
+#### Projeção com `record` no `.Select(...)`
+
+Você também pode usar um `record` ou DTO para definir automaticamente quais colunas devem entrar no `SELECT`.
+Isso é útil para montar listas enxutas, evitar `SELECT *` e reaproveitar contratos já usados na aplicação.
+
+```csharp
+public record VehicleListItem(
+    [property: JsonPropertyName("uuid")] string? Uuid,
+    [property: JsonPropertyName("placa")] string? Placa,
+    [property: JsonPropertyName("nome_portal")] string? NomePortal);
+
+var builder = SelectQueryBuilder.For<Veiculo>()
+    .Select<VehicleListItem>()
+    .Where("cancelado", false)
+    .Where("id_cliente", 12);
+```
+
+SQL gerada:
+
+```sql
+SELECT `uuid`, `placa`, `nome_portal` FROM `veiculo` WHERE `cancelado` = @p0 AND `id_cliente` = @p1
+```
+
+Formas suportadas:
+
+```csharp
+.Select<VehicleListItem>()
+.Select(typeof(VehicleListItem))
+.Select(new VehicleListItem(null, null, null))
+```
+
+Prioridade de resolução do nome da coluna no `.Select(...)` com `record`:
+
+1. `DbField("...")`
+2. `JsonPropertyName("...")`
+3. Mapeamento do model base usado em `SelectQueryBuilder.For<T>()`
+4. Fallback automático para `snake_case`
+
+Exemplo com `DbField`:
+
+```csharp
+public record VehicleListItemCustom
+{
+    [DbField("nome_portal")]
+    public string? NomePortal { get; init; }
+}
+```
+
+Se não houver atributo nem mapeamento explícito, uma propriedade como `NomePortal` será convertida automaticamente para `nome_portal`.
+
+#### Inspecionando a SQL antes de executar
+
+Para obter a SQL parametrizada:
+
+```csharp
+var (sql, command) = builder.Build();
+Console.WriteLine(sql);
+```
+
+Para obter uma versão pronta para debug/log, com os parâmetros substituídos:
+
+```csharp
+var debugSql = builder.ToDebugSql();
+Console.WriteLine(debugSql);
+```
+
+Exemplo de saída:
+
+```sql
+SELECT `uuid`, `placa`, `nome_portal` FROM `veiculo` WHERE `cancelado` = 0 AND `id_cliente` = 12
+```
+
+`ToDebugSql()` é destinado a inspeção e logging. A execução real continua sendo feita com parâmetros, mantendo a proteção contra SQL Injection.
+
 ### Fluent Delete Query Builder
 
 O `DeleteQueryBuilder` permite criar operações de exclusão de forma segura e fluente.

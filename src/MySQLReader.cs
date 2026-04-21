@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using System.Reflection;
 using System.Linq;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Jovemnf.MySQL;
 
@@ -926,135 +927,268 @@ public class MySQLReader(DbDataReader dr) : IDisposable, IAsyncDisposable
     /// </summary>
     /// <typeparam name="T">O tipo do modelo a ser preenchido.</typeparam>
     /// <returns>Uma instância de T preenchida com os dados da linha atual.</returns>
-    public T ToModel<T>() where T : new()
+    public T ToModel<T>()
     {
-        var model = new T();
-        var properties = typeof(T).GetProperties(BindingFlags.Public | BindingFlags.Instance);
+        return (T)ToModel(typeof(T));
+    }
+
+    private object ToModel(Type modelType)
+    {
+        var properties = modelType.GetProperties(BindingFlags.Public | BindingFlags.Instance);
         var columns = GetColumnNames();
+        var parameterlessCtor = modelType.GetConstructor(Type.EmptyTypes);
+        var constructorBoundProperties = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        object model;
+
+        if (parameterlessCtor != null)
+        {
+            model = parameterlessCtor.Invoke(null);
+        }
+        else if (modelType.IsValueType)
+        {
+            model = Activator.CreateInstance(modelType);
+        }
+        else
+        {
+            var constructor = ResolveConstructor(modelType, properties, columns)
+                ?? throw new InvalidOperationException($"Nenhum construtor publico compativel foi encontrado para o tipo {modelType.Name}.");
+
+            var parameters = constructor.GetParameters();
+            var arguments = new object[parameters.Length];
+
+            for (var index = 0; index < parameters.Length; index++)
+            {
+                var parameter = parameters[index];
+                var property = FindPropertyForParameter(properties, parameter);
+                if (property != null)
+                {
+                    constructorBoundProperties.Add(property.Name);
+                }
+
+                arguments[index] = ResolveArgumentValue(parameter, property, columns);
+            }
+
+            model = constructor.Invoke(arguments);
+        }
 
         foreach (var prop in properties)
         {
-            // Check for DbField attribute
-            var dbFieldAttr = prop.GetCustomAttribute<DbFieldAttribute>(inherit: true);
-            string targetColumnName = dbFieldAttr?.Name ?? prop.Name;
+            if (constructorBoundProperties.Contains(prop.Name))
+                continue;
 
-            // Try exact match or case-insensitive match
-            string columnName = columns.FirstOrDefault(c => 
-                string.Equals(c, targetColumnName, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(c.Replace("_", ""), targetColumnName, StringComparison.OrdinalIgnoreCase));
-                
-            if (columnName != null)
+            if (prop.SetMethod == null || !prop.SetMethod.IsPublic)
+                continue;
+
+            var columnName = FindMatchingColumnName(columns, prop);
+            if (columnName == null)
+                continue;
+
+            object val = Get(columnName);
+            if (val == null || val == DBNull.Value)
+                continue;
+
+            try
             {
-                object val = Get(columnName);
-                if (val != null && val != DBNull.Value)
+                var convertedValue = ConvertValue(val, prop.PropertyType);
+                if (convertedValue != null || CanAssignNull(prop.PropertyType))
                 {
-                    try
-                    {
-                        Type propType = Nullable.GetUnderlyingType(prop.PropertyType) ?? prop.PropertyType;
-                            
-                        object convertedValue = TryParse.ChangeType(val, propType);
-                            
-                        if (convertedValue != null)
-                        {
-                            prop.SetValue(model, convertedValue);
-                        }
-                        else if (propType.IsEnum)
-                        {
-                            prop.SetValue(model, Enum.Parse(propType, val.ToString()));
-                        }
-                        else if (val is string jsonString && IsJsonString(jsonString))
-                        {
-                            // Automatic JSON deserialization for complex types and custom date types
-                            try
-                            {
-                                if (propType == typeof(MyDateTime))
-                                {
-                                    var dateTime = JsonSerializer.Deserialize<DateTime>(jsonString);
-                                    prop.SetValue(model, new MyDateTime(dateTime));
-                                }
-                                else if (propType == typeof(MyDate))
-                                {
-                                    var dateTime = JsonSerializer.Deserialize<DateTime>(jsonString);
-                                    prop.SetValue(model, new MyDate(dateTime));
-                                }
-                                else if (IsComplexType(propType))
-                                {
-                                    // Use case-insensitive property matching for JSON deserialization
-                                    var options = new JsonSerializerOptions
-                                    {
-                                        PropertyNameCaseInsensitive = true,
-                                        PropertyNamingPolicy = null
-                                    };
-                                    var deserializedValue = JsonSerializer.Deserialize(jsonString, propType, options);
-                                    prop.SetValue(model, deserializedValue);
-                                }
-                            }
-                            catch (Exception)
-                            {
-                                // If JSON deserialization fails, try standard conversion
-                                try
-                                {
-                                    if (propType == typeof(MyDateTime))
-                                    {
-                                        prop.SetValue(model, new MyDateTime(Convert.ToDateTime(val)));
-                                    }
-                                    else if (propType == typeof(MyDate))
-                                    {
-                                        prop.SetValue(model, new MyDate(Convert.ToDateTime(val)));
-                                    }
-                                    else
-                                    {
-                                        prop.SetValue(model, Convert.ChangeType(val, propType));
-                                    }
-                                }
-                                catch 
-                                { 
-                                    // Silently ignore if both JSON and standard conversion fail
-                                    // This allows partial object mapping to succeed
-                                }
-                            }
-                        }
-                        else if (propType == typeof(Point))
-                        {
-                            // Handle GEOMETRY POINT type
-                            if (val is byte[] wkb)
-                            {
-                                var point = Point.FromWKB(wkb);
-                                prop.SetValue(model, point);
-                            }
-                        }
-                        else if (propType == typeof(Polygon))
-                        {
-                            // Handle GEOMETRY POLYGON type
-                            // Note: SELECT should use ST_AsText(polygon_column)
-                            if (val is string wkt)
-                            {
-                                var polygon = Polygon.FromWKT(wkt);
-                                prop.SetValue(model, polygon);
-                            }
-                        }
-                        else if (propType == typeof(MyDateTime))
-                        {
-                            prop.SetValue(model, new MyDateTime(Convert.ToDateTime(val)));
-                        }
-                        else if (propType == typeof(MyDate))
-                        {
-                            prop.SetValue(model, new MyDate(Convert.ToDateTime(val)));
-                        }
-                        else
-                        {
-                            prop.SetValue(model, Convert.ChangeType(val, propType));
-                        }
-                    }
-                    catch
-                    {
-                        // Ignore mapping errors for individual properties
-                    }
+                    prop.SetValue(model, convertedValue);
                 }
+            }
+            catch
+            {
+                // Ignore mapping errors for individual properties
             }
         }
 
         return model;
+    }
+
+    private ConstructorInfo ResolveConstructor(Type modelType, PropertyInfo[] properties, IReadOnlyList<string> columns)
+    {
+        var constructors = modelType
+            .GetConstructors(BindingFlags.Public | BindingFlags.Instance)
+            .OrderByDescending(ctor => ctor.GetParameters().Length);
+
+        foreach (var constructor in constructors)
+        {
+            var parameters = constructor.GetParameters();
+            var canUse = true;
+
+            foreach (var parameter in parameters)
+            {
+                var property = FindPropertyForParameter(properties, parameter);
+                var columnName = FindMatchingColumnName(columns, parameter, property);
+                if (columnName != null || parameter.HasDefaultValue || CanAssignNull(parameter.ParameterType))
+                    continue;
+
+                canUse = false;
+                break;
+            }
+
+            if (canUse)
+                return constructor;
+        }
+
+        return null;
+    }
+
+    private PropertyInfo FindPropertyForParameter(IEnumerable<PropertyInfo> properties, ParameterInfo parameter)
+    {
+        return properties.FirstOrDefault(prop =>
+            string.Equals(prop.Name, parameter.Name, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private object ResolveArgumentValue(ParameterInfo parameter, PropertyInfo property, IReadOnlyList<string> columns)
+    {
+        var columnName = FindMatchingColumnName(columns, parameter, property);
+        if (columnName == null)
+        {
+            if (parameter.HasDefaultValue)
+                return parameter.DefaultValue;
+
+            if (CanAssignNull(parameter.ParameterType))
+                return null;
+
+            return Activator.CreateInstance(parameter.ParameterType);
+        }
+
+        var value = Get(columnName);
+        if (value == null || value == DBNull.Value)
+        {
+            if (CanAssignNull(parameter.ParameterType))
+                return null;
+
+            return Activator.CreateInstance(parameter.ParameterType);
+        }
+
+        return ConvertValue(value, parameter.ParameterType);
+    }
+
+    private string FindMatchingColumnName(IReadOnlyList<string> columns, PropertyInfo property)
+    {
+        return FindMatchingColumnName(columns, ResolveTargetColumnName(property), property.Name);
+    }
+
+    private string FindMatchingColumnName(IReadOnlyList<string> columns, ParameterInfo parameter, PropertyInfo property)
+    {
+        return FindMatchingColumnName(
+            columns,
+            ResolveTargetColumnName(parameter, property),
+            property?.Name ?? parameter.Name ?? string.Empty);
+    }
+
+    private string FindMatchingColumnName(IReadOnlyList<string> columns, string preferredName, string fallbackName)
+    {
+        return columns.FirstOrDefault(c =>
+            string.Equals(c, preferredName, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(c.Replace("_", ""), preferredName.Replace("_", ""), StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(c, fallbackName, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(c.Replace("_", ""), fallbackName.Replace("_", ""), StringComparison.OrdinalIgnoreCase));
+    }
+
+    private string ResolveTargetColumnName(PropertyInfo property)
+    {
+        var dbFieldAttr = property.GetCustomAttribute<DbFieldAttribute>(inherit: true);
+        if (!string.IsNullOrWhiteSpace(dbFieldAttr?.Name))
+            return dbFieldAttr.Name;
+
+        var jsonAttr = property.GetCustomAttribute<JsonPropertyNameAttribute>(inherit: true);
+        if (!string.IsNullOrWhiteSpace(jsonAttr?.Name))
+            return jsonAttr.Name;
+
+        return property.Name;
+    }
+
+    private string ResolveTargetColumnName(ParameterInfo parameter, PropertyInfo property)
+    {
+        if (property != null)
+            return ResolveTargetColumnName(property);
+
+        var dbFieldAttr = parameter.GetCustomAttribute<DbFieldAttribute>(inherit: true);
+        if (!string.IsNullOrWhiteSpace(dbFieldAttr?.Name))
+            return dbFieldAttr.Name;
+
+        var jsonAttr = parameter.GetCustomAttribute<JsonPropertyNameAttribute>(inherit: true);
+        if (!string.IsNullOrWhiteSpace(jsonAttr?.Name))
+            return jsonAttr.Name;
+
+        return parameter.Name ?? string.Empty;
+    }
+
+    private object ConvertValue(object val, Type targetType)
+    {
+        var propType = Nullable.GetUnderlyingType(targetType) ?? targetType;
+        object convertedValue = TryParse.ChangeType(val, propType);
+
+        if (convertedValue != null)
+        {
+            return convertedValue;
+        }
+
+        if (propType.IsEnum)
+        {
+            return Enum.Parse(propType, val.ToString()!);
+        }
+
+        if (val is string jsonString && IsJsonString(jsonString))
+        {
+            try
+            {
+                if (propType == typeof(MyDateTime))
+                {
+                    var dateTime = JsonSerializer.Deserialize<DateTime>(jsonString);
+                    return new MyDateTime(dateTime);
+                }
+
+                if (propType == typeof(MyDate))
+                {
+                    var dateTime = JsonSerializer.Deserialize<DateTime>(jsonString);
+                    return new MyDate(dateTime);
+                }
+
+                if (IsComplexType(propType))
+                {
+                    var options = new JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true,
+                        PropertyNamingPolicy = null
+                    };
+                    return JsonSerializer.Deserialize(jsonString, propType, options);
+                }
+            }
+            catch
+            {
+                // fallback below
+            }
+        }
+
+        if (propType == typeof(Point) && val is byte[] wkb)
+        {
+            return Point.FromWKB(wkb);
+        }
+
+        if (propType == typeof(Polygon) && val is string wkt)
+        {
+            return Polygon.FromWKT(wkt);
+        }
+
+        if (propType == typeof(MyDateTime))
+        {
+            return new MyDateTime(Convert.ToDateTime(val));
+        }
+
+        if (propType == typeof(MyDate))
+        {
+            return new MyDate(Convert.ToDateTime(val));
+        }
+
+        return Convert.ChangeType(val, propType);
+    }
+
+    private bool CanAssignNull(Type type)
+    {
+        return !type.IsValueType || Nullable.GetUnderlyingType(type) != null;
     }
 
     /// <summary>
@@ -1094,7 +1228,7 @@ public class MySQLReader(DbDataReader dr) : IDisposable, IAsyncDisposable
     /// </summary>
     /// <typeparam name="T">O tipo do modelo.</typeparam>
     /// <returns>Lista de instâncias de T.</returns>
-    public List<T> ToModelList<T>() where T : new()
+    public List<T> ToModelList<T>()
     {
         var list = new List<T>();
         try
@@ -1117,7 +1251,7 @@ public class MySQLReader(DbDataReader dr) : IDisposable, IAsyncDisposable
     /// </summary>
     /// <typeparam name="T">O tipo do modelo.</typeparam>
     /// <returns>Task com lista de instâncias de T.</returns>
-    public async Task<List<T>> ToModelListAsync<T>() where T : new()
+    public async Task<List<T>> ToModelListAsync<T>()
     {
         var list = new List<T>();
         try

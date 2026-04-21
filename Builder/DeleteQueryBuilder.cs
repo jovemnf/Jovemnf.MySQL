@@ -67,6 +67,8 @@ public class DeleteQueryBuilder
     /// </summary>
     internal (string Sql, MySqlCommand Command) BuildSelect()
     {
+        if (string.IsNullOrEmpty(_tableName))
+            throw new InvalidOperationException("Tabela não especificada");
         if (_whereConditions.Count == 0 && !_allowAll)
             throw new InvalidOperationException("Nenhuma condição WHERE definida para SELECT.");
         if (_allowAll)

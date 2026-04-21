@@ -403,25 +403,28 @@ public class MySQL : IDisposable, IAsyncDisposable
         return list.Count > 0 ? list[0] : default;
     }
 
-    public async Task<T> ExecuteInsertAsync<T>(T entity) where T : class
+    public async Task<T> ExecuteInsertAsync<T>(T entity)
     {
+        ArgumentNullException.ThrowIfNull(entity);
+
         var builder = new InsertQueryBuilder<T>();
         builder.ValuesFrom(entity);
             
         long lastId = await ExecuteInsertAsync((InsertQueryBuilder)builder, true);
             
         // Try to set the ID back to the entity
+        object boxedEntity = entity;
         try
         {
             var idProp = typeof(T).GetProperty("Id", BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
             if (idProp != null && idProp.CanWrite)
             {
-                idProp.SetValue(entity, Convert.ChangeType(lastId, idProp.PropertyType));
+                idProp.SetValue(boxedEntity, Convert.ChangeType(lastId, idProp.PropertyType));
             }
         }
         catch { /* Ignore if ID cannot be set */ }
 
-        return entity;
+        return (T)boxedEntity;
     }
 
     public long ExecuteInsertSync(bool lastID = true)
@@ -516,7 +519,7 @@ public class MySQL : IDisposable, IAsyncDisposable
     /// <summary>
     /// Executa o SELECT e retorna todas as linhas mapeadas para o tipo T.
     /// </summary>
-    public async Task<List<T>> ExecuteQueryAsync<T>(SelectQueryBuilder builder) where T : new()
+    public async Task<List<T>> ExecuteQueryAsync<T>(SelectQueryBuilder builder)
     {
         await using var reader = await ExecuteQueryAsync(builder);
         return await reader.ToModelListAsync<T>();
@@ -540,6 +543,26 @@ public class MySQL : IDisposable, IAsyncDisposable
         if (this.trans != null) this.cmd.Transaction = this.trans;
         var result = await this.cmd.ExecuteScalarAsync();
         return Convert.ToInt64(result);
+    }
+
+    public bool ExecuteExistsSync(SelectQueryBuilder builder)
+    {
+        var (_, command) = builder.BuildExists();
+        this.cmd = command;
+        this.cmd.Connection = this.bdConn;
+        if (this.trans != null) this.cmd.Transaction = this.trans;
+        var result = this.cmd.ExecuteScalar();
+        return result != null && result != DBNull.Value && Convert.ToInt64(result) > 0;
+    }
+
+    public async Task<bool> ExecuteExistsAsync(SelectQueryBuilder builder)
+    {
+        var (_, command) = builder.BuildExists();
+        this.cmd = command;
+        this.cmd.Connection = this.bdConn;
+        if (this.trans != null) this.cmd.Transaction = this.trans;
+        var result = await this.cmd.ExecuteScalarAsync();
+        return result != null && result != DBNull.Value && Convert.ToInt64(result) > 0;
     }
 
     public void BeginSync()

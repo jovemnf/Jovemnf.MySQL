@@ -11,6 +11,13 @@ public class TestModelWithAttribute
     public string Name { get; set; } = null!;
 }
 
+[DbTable("custom_struct_table")]
+public struct TestStructWithAttribute
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+}
+
 public class TestModelWithoutAttribute
 {
     public int Id { get; set; }
@@ -24,6 +31,13 @@ public class DbTableTests
     {
         var sql = SelectQueryBuilder.For<TestModelWithAttribute>().ToString();
         Assert.Contains("FROM `custom_table`", sql);
+    }
+
+    [Fact]
+    public void SelectQueryBuilder_ForStructWithAttribute_SetsCorrectTable()
+    {
+        var sql = SelectQueryBuilder.For<TestStructWithAttribute>().ToString();
+        Assert.Contains("FROM `custom_struct_table`", sql);
     }
 
     [Fact]
@@ -43,6 +57,15 @@ public class DbTableTests
     }
 
     [Fact]
+    public void InsertQueryBuilder_Generic_WithStructAttribute_SetsCorrectTable()
+    {
+        var sql = new InsertQueryBuilder<TestStructWithAttribute>()
+            .Value("Name", "Test")
+            .ToString();
+        Assert.Contains("INSERT INTO `custom_struct_table`", sql);
+    }
+
+    [Fact]
     public void UpdateQueryBuilder_Generic_WithAttribute_SetsCorrectTable()
     {
         var sql = new UpdateQueryBuilder<TestModelWithAttribute>()
@@ -53,12 +76,31 @@ public class DbTableTests
     }
 
     [Fact]
+    public void UpdateQueryBuilder_Generic_WithStructAttribute_SetsCorrectTable()
+    {
+        var sql = new UpdateQueryBuilder<TestStructWithAttribute>()
+            .Set("Name", "NewName")
+            .Where("Id", 1)
+            .ToString();
+        Assert.Contains("UPDATE `custom_struct_table`", sql);
+    }
+
+    [Fact]
     public void DeleteQueryBuilder_Generic_WithAttribute_SetsCorrectTable()
     {
         var sql = new DeleteQueryBuilder<TestModelWithAttribute>()
             .Where("Id", 1)
             .ToString();
         Assert.Contains("DELETE FROM `custom_table`", sql);
+    }
+
+    [Fact]
+    public void DeleteQueryBuilder_Generic_WithStructAttribute_SetsCorrectTable()
+    {
+        var sql = new DeleteQueryBuilder<TestStructWithAttribute>()
+            .Where("Id", 1)
+            .ToString();
+        Assert.Contains("DELETE FROM `custom_struct_table`", sql);
     }
 
     [Fact]

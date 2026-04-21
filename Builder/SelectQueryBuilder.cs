@@ -1,8 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Globalization;
 using System.Linq;
 using System.Reflection;
+using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using System.Text;
 using System.Threading.Tasks;
 using MySqlConnector;
@@ -96,6 +99,28 @@ public class SelectQueryBuilder
         return connection.ExecuteQueryAsync<T>(this);
     }
 
+    /// <summary>
+    /// Verifica se existe pelo menos um registro que atenda aos filtros informados.
+    /// </summary>
+    public bool ExistsSync(MySQL connection)
+    {
+        ArgumentNullException.ThrowIfNull(connection);
+        if (_tableName == null)
+            throw new InvalidOperationException("Tabela não especificada");
+        return connection.ExecuteExistsSync(this);
+    }
+
+    /// <summary>
+    /// Verifica de forma assíncrona se existe pelo menos um registro que atenda aos filtros informados.
+    /// </summary>
+    public Task<bool> ExistsAsync(MySQL connection)
+    {
+        ArgumentNullException.ThrowIfNull(connection);
+        if (_tableName == null)
+            throw new InvalidOperationException("Tabela não especificada");
+        return connection.ExecuteExistsAsync(this);
+    }
+
     public SelectQueryBuilder Select(params string[] fields)
     {
         foreach (var field in fields)
@@ -104,6 +129,23 @@ public class SelectQueryBuilder
         }
 
         return this;
+    }
+
+    public SelectQueryBuilder Select<TSelection>(TSelection selection)
+    {
+        ArgumentNullException.ThrowIfNull(selection);
+        return Select(selection.GetType());
+    }
+
+    public SelectQueryBuilder Select<TSelection>()
+    {
+        return Select(typeof(TSelection));
+    }
+
+    public SelectQueryBuilder Select(Type selectionType)
+    {
+        ArgumentNullException.ThrowIfNull(selectionType);
+        return AddSelectionFields(selectionType);
     }
 
     public SelectQueryBuilder SelectRaw(string sql)
@@ -230,67 +272,24 @@ public class SelectQueryBuilder
 
     public (string Sql, MySqlCommand Command) Build()
     {
+        return BuildQuery(BuildSelectionClause(), includeOrderBy: true, limit: _limit, offset: _offset);
+    }
+
+    /// <summary>
+    /// Monta uma consulta EXISTS baseada na tabela, JOINs e WHEREs atuais.
+    /// </summary>
+    public (string Sql, MySqlCommand Command) BuildExists()
+    {
         _paramCounter = 0;
         if (string.IsNullOrEmpty(_tableName))
             throw new InvalidOperationException("Nome da tabela não definido");
 
         var command = new MySqlCommand();
-        var selection = BuildSelectionClause();
         var sqlBuilder = new StringBuilder();
-        sqlBuilder.Append("SELECT ");
-        sqlBuilder.Append(selection);
-        sqlBuilder.Append(" FROM ");
+        sqlBuilder.Append("SELECT EXISTS(SELECT 1 FROM ");
         sqlBuilder.Append(EscapeIdentifier(_tableName));
-
-        // JOINS
-        foreach (var join in _joins)
-        {
-            sqlBuilder.Append(' ');
-            sqlBuilder.Append(join.Type);
-            sqlBuilder.Append(" JOIN ");
-            sqlBuilder.Append(EscapeIdentifier(join.Table));
-            sqlBuilder.Append(" ON ");
-            sqlBuilder.Append(EscapeIdentifier(join.First));
-            sqlBuilder.Append(' ');
-            sqlBuilder.Append(join.Operator);
-            sqlBuilder.Append(' ');
-            sqlBuilder.Append(EscapeIdentifier(join.Second));
-        }
-
-        // WHERE
-        if (_whereConditions.Count > 0)
-        {
-            var whereClauses = new List<string>(_whereConditions.Count);
-            for (int i = 0; i < _whereConditions.Count; i++)
-            {
-                var condition = _whereConditions[i];
-                var logic = i > 0 ? condition.Logic : "";
-                string clause = BuildWhereClause(condition, command);
-                if (i > 0) whereClauses.Add($"{logic} {clause}");
-                else whereClauses.Add(clause);
-            }
-            sqlBuilder.Append(" WHERE ");
-            sqlBuilder.Append(string.Join(" ", whereClauses));
-        }
-
-        // ORDER BY
-        if (_orderBys.Count > 0)
-        {
-            sqlBuilder.Append(" ORDER BY ");
-            sqlBuilder.Append(string.Join(", ", _orderBys));
-        }
-
-        // LIMIT
-        if (_limit.HasValue)
-        {
-            sqlBuilder.Append(" LIMIT ");
-            sqlBuilder.Append(_limit.Value);
-            if (_offset.HasValue && _offset.Value > 0)
-            {
-                sqlBuilder.Append(" OFFSET ");
-                sqlBuilder.Append(_offset.Value);
-            }
-        }
+        AppendJoinsAndWhere(sqlBuilder, command);
+        sqlBuilder.Append(" LIMIT 1)");
 
         var sql = sqlBuilder.ToString();
         command.CommandText = sql;
@@ -308,6 +307,12 @@ public class SelectQueryBuilder
         return Build().Sql;
     }
 
+    public string ToDebugSql()
+    {
+        var (sql, command) = Build();
+        return ReplaceParameters(sql, command.Parameters);
+    }
+
     private string BuildWhereClause(WhereCondition condition, MySqlCommand command)
     {
         if (condition.Operator == "RAW")
@@ -315,13 +320,21 @@ public class SelectQueryBuilder
             string sql = condition.RawSql;
             if (condition.RawParameters != null)
             {
+                var parameterTokens = new List<(string Token, string ParameterName)>(condition.RawParameters.Length);
                 for (int i = 0; i < condition.RawParameters.Length; i++)
                 {
                     var pName = GetNextParamName();
                     var parameterName = $"@{pName}";
-                    sql = sql.Replace("{" + i + "}", parameterName);
-                    sql = sql.Replace($"@p{i}", parameterName);
+                    var token = $"__raw_param_{i}__";
+                    sql = sql.Replace("{" + i + "}", token);
+                    sql = Regex.Replace(sql, $@"{Regex.Escape($"@p{i}")}(?!\w)", token);
+                    parameterTokens.Add((token, parameterName));
                     AddParameter(command, pName, condition.RawParameters[i]);
+                }
+
+                foreach (var (token, parameterName) in parameterTokens)
+                {
+                    sql = sql.Replace(token, parameterName);
                 }
             }
             return sql;
@@ -362,6 +375,42 @@ public class SelectQueryBuilder
 
     private string GetNextParamName() => $"p{_paramCounter++}";
 
+    private static string ReplaceParameters(string sql, MySqlParameterCollection parameters)
+    {
+        var debugSql = sql;
+
+        foreach (var parameter in parameters
+                     .OrderByDescending(p => p.ParameterName.Length))
+        {
+            debugSql = Regex.Replace(
+                debugSql,
+                $@"{Regex.Escape(parameter.ParameterName)}(?!\w)",
+                FormatParameterValue(parameter.Value));
+        }
+
+        return debugSql;
+    }
+
+    private static string FormatParameterValue(object value)
+    {
+        if (value == null || value == DBNull.Value)
+            return "NULL";
+
+        return value switch
+        {
+            string s => $"'{s.Replace("'", "''")}'",
+            char c => $"'{c.ToString().Replace("'", "''")}'",
+            bool b => b ? "1" : "0",
+            DateTime dt => $"'{dt:yyyy-MM-dd HH:mm:ss.fffffff}'",
+            DateTimeOffset dto => $"'{dto:yyyy-MM-dd HH:mm:ss.fffffff zzz}'",
+            Guid guid => $"'{guid}'",
+            byte[] bytes => $"0x{Convert.ToHexString(bytes)}",
+            Enum e => Convert.ToInt64(e, CultureInfo.InvariantCulture).ToString(CultureInfo.InvariantCulture),
+            IFormattable formattable => formattable.ToString(null, CultureInfo.InvariantCulture),
+            _ => $"'{value.ToString()?.Replace("'", "''")}'"
+        };
+    }
+
     private string BuildSelectionClause()
     {
         if (_fields.Count == 0)
@@ -374,6 +423,120 @@ public class SelectQueryBuilder
         }
 
         return string.Join(", ", selections);
+    }
+
+    private (string Sql, MySqlCommand Command) BuildQuery(string selection, bool includeOrderBy, int? limit, int? offset)
+    {
+        _paramCounter = 0;
+        if (string.IsNullOrEmpty(_tableName))
+            throw new InvalidOperationException("Nome da tabela não definido");
+
+        var command = new MySqlCommand();
+        var sqlBuilder = new StringBuilder();
+        sqlBuilder.Append("SELECT ");
+        sqlBuilder.Append(selection);
+        sqlBuilder.Append(" FROM ");
+        sqlBuilder.Append(EscapeIdentifier(_tableName));
+        AppendJoinsAndWhere(sqlBuilder, command);
+
+        if (includeOrderBy && _orderBys.Count > 0)
+        {
+            sqlBuilder.Append(" ORDER BY ");
+            sqlBuilder.Append(string.Join(", ", _orderBys));
+        }
+
+        if (limit.HasValue)
+        {
+            sqlBuilder.Append(" LIMIT ");
+            sqlBuilder.Append(limit.Value);
+            if (offset.HasValue && offset.Value > 0)
+            {
+                sqlBuilder.Append(" OFFSET ");
+                sqlBuilder.Append(offset.Value);
+            }
+        }
+
+        var sql = sqlBuilder.ToString();
+        command.CommandText = sql;
+        return (sql, command);
+    }
+
+    private void AppendJoinsAndWhere(StringBuilder sqlBuilder, MySqlCommand command)
+    {
+        foreach (var join in _joins)
+        {
+            sqlBuilder.Append(' ');
+            sqlBuilder.Append(join.Type);
+            sqlBuilder.Append(" JOIN ");
+            sqlBuilder.Append(EscapeIdentifier(join.Table));
+            sqlBuilder.Append(" ON ");
+            sqlBuilder.Append(EscapeIdentifier(join.First));
+            sqlBuilder.Append(' ');
+            sqlBuilder.Append(join.Operator);
+            sqlBuilder.Append(' ');
+            sqlBuilder.Append(EscapeIdentifier(join.Second));
+        }
+
+        if (_whereConditions.Count > 0)
+        {
+            var whereClauses = new List<string>(_whereConditions.Count);
+            for (int i = 0; i < _whereConditions.Count; i++)
+            {
+                var condition = _whereConditions[i];
+                var logic = i > 0 ? condition.Logic : "";
+                string clause = BuildWhereClause(condition, command);
+                if (i > 0)
+                    whereClauses.Add($"{logic} {clause}");
+                else
+                    whereClauses.Add(clause);
+            }
+
+            sqlBuilder.Append(" WHERE ");
+            sqlBuilder.Append(string.Join(" ", whereClauses));
+        }
+    }
+
+    private SelectQueryBuilder AddSelectionFields(Type selectionType)
+    {
+        foreach (var field in ResolveSelectionFields(selectionType))
+        {
+            _fields.Add(new SelectionField { Name = field, IsRaw = false });
+        }
+
+        return this;
+    }
+
+    private IEnumerable<string> ResolveSelectionFields(Type selectionType)
+    {
+        ArgumentNullException.ThrowIfNull(selectionType);
+
+        var properties = selectionType.GetProperties(BindingFlags.Public | BindingFlags.Instance);
+        if (properties.Length == 0)
+        {
+            throw new ArgumentException($"O tipo {selectionType.Name} não possui propriedades públicas para seleção.", nameof(selectionType));
+        }
+
+        foreach (var property in properties)
+        {
+            var fieldName = ResolveSelectionFieldName(property);
+            yield return fieldName;
+        }
+    }
+
+    private string ResolveSelectionFieldName(PropertyInfo property)
+    {
+        var attr = property.GetCustomAttribute<DbFieldAttribute>(true);
+        if (attr?.Name != null)
+            return attr.Name;
+
+        var jsonAttr = property.GetCustomAttribute<JsonPropertyNameAttribute>(true);
+        if (!string.IsNullOrWhiteSpace(jsonAttr?.Name))
+            return jsonAttr.Name;
+
+        var resolvedField = ResolveField(property.Name);
+        return string.Equals(resolvedField, property.Name, StringComparison.Ordinal)
+            ? property.Name.ToSnakeCase()
+            : resolvedField;
     }
 
     private static List<object> MaterializeValues<T>(IEnumerable<T> values)
@@ -564,5 +727,23 @@ public class SelectQueryExecutor
         if (_transaction != null) command.Transaction = _transaction;
         var result = command.ExecuteScalar();
         return Convert.ToInt64(result);
+    }
+
+    public async Task<bool> ExecuteExistsAsync(SelectQueryBuilder builder)
+    {
+        var (_, command) = builder.BuildExists();
+        command.Connection = _connection;
+        if (_transaction != null) command.Transaction = _transaction;
+        var result = await command.ExecuteScalarAsync();
+        return result != null && result != DBNull.Value && Convert.ToInt64(result) > 0;
+    }
+
+    public bool ExecuteExistsSync(SelectQueryBuilder builder)
+    {
+        var (_, command) = builder.BuildExists();
+        command.Connection = _connection;
+        if (_transaction != null) command.Transaction = _transaction;
+        var result = command.ExecuteScalar();
+        return result != null && result != DBNull.Value && Convert.ToInt64(result) > 0;
     }
 }
