@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Diagnostics;
+using System.Linq;
+using System.Linq.Expressions;
 using System.Reflection;
 using System.Text.Json;
 using System.Threading;
@@ -15,7 +17,7 @@ public class UpdateQueryBuilder
 {
     private string _tableName;
 
-    public static UpdateQueryBuilder For<T>() => new UpdateQueryBuilder<T>();
+    public static UpdateQueryBuilder<T> For<T>() => new UpdateQueryBuilder<T>();
 
     protected virtual string ResolveField(string field) => field;
     private readonly Dictionary<string, object> _fields = new();
@@ -270,6 +272,30 @@ public class UpdateQueryBuilder
         return this;
     }
 
+    public UpdateQueryBuilder OrWhereIn<T>(string field, IEnumerable<T> values)
+    {
+        _whereConditions.Add(new WhereCondition
+        {
+            Field = ResolveField(field),
+            Values = MaterializeValues(values),
+            Operator = "IN",
+            Logic = "OR"
+        });
+        return this;
+    }
+
+    public UpdateQueryBuilder OrWhereNotIn<T>(string field, IEnumerable<T> values)
+    {
+        _whereConditions.Add(new WhereCondition
+        {
+            Field = ResolveField(field),
+            Values = MaterializeValues(values),
+            Operator = "NOT IN",
+            Logic = "OR"
+        });
+        return this;
+    }
+
     public UpdateQueryBuilder OrWhere(string field, object value, string op = "=")
     {
         ValidateOperator(op);
@@ -278,6 +304,30 @@ public class UpdateQueryBuilder
             Field = ResolveField(field), 
             Value = value, 
             Operator = op,
+            Logic = "OR"
+        });
+        return this;
+    }
+
+    public UpdateQueryBuilder WhereRaw(string sql, params object[] parameters)
+    {
+        _whereConditions.Add(new WhereCondition
+        {
+            RawSql = sql,
+            RawParameters = parameters,
+            Operator = "RAW",
+            Logic = "AND"
+        });
+        return this;
+    }
+
+    public UpdateQueryBuilder OrWhereRaw(string sql, params object[] parameters)
+    {
+        _whereConditions.Add(new WhereCondition
+        {
+            RawSql = sql,
+            RawParameters = parameters,
+            Operator = "RAW",
             Logic = "OR"
         });
         return this;
@@ -463,6 +513,22 @@ public class UpdateQueryBuilder
 
     private string BuildWhereClause(WhereCondition condition, MySqlCommand command)
     {
+        if (condition.Operator == "RAW")
+        {
+            var sql = condition.RawSql;
+            if (condition.RawParameters != null)
+            {
+                for (int i = 0; i < condition.RawParameters.Length; i++)
+                {
+                    var paramName = GetNextParamName();
+                    sql = sql.Replace("{" + i + "}", $"@{paramName}");
+                    AddParameter(command, paramName, condition.RawParameters[i]);
+                }
+            }
+
+            return sql;
+        }
+
         var escapedField = EscapeIdentifier(condition.Field);
 
         switch (condition.Operator)
@@ -593,6 +659,8 @@ public class UpdateQueryBuilder
         public List<object> Values { get; set; }
         public string Operator { get; set; }
         public string Logic { get; set; }
+        public string RawSql { get; set; }
+        public object[] RawParameters { get; set; }
     }
 
     // Helper class to mark Point values for special handling
@@ -630,6 +698,14 @@ public class UpdateQueryBuilder<T> : UpdateQueryBuilder
     public UpdateQueryBuilder()
     {
         Table(ResolvedTableName);
+    }
+
+    public UpdateQueryBuilder<T> Where(Expression<Func<T, bool>> predicate)
+    {
+        var translated = WhereExpressionTranslator.BuildRaw(predicate, ResolveField);
+        base.WhereRaw(translated.Sql, translated.Parameters);
+
+        return this;
     }
 
     protected override string ResolveField(string field)

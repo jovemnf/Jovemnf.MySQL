@@ -338,6 +338,169 @@ using (var mysql = new MySQL(config))
 }
 ```
 
+#### `Where` tipado com expressão
+
+Nos builders genéricos, você também pode escrever o `WHERE` de forma mais próxima de LINQ:
+
+```csharp
+var builder = SelectQueryBuilder.For<Veiculo>()
+    .Where(v => v.IdCliente == 12 && v.Ativo && v.Status != "bloqueado");
+```
+
+Nesse caso, o parâmetro `v` é do tipo do model informado em `For<T>()`. Isso permite escrever filtros com autocomplete e segurança de compilação sobre as propriedades da entidade.
+
+Exemplos suportados:
+
+```csharp
+SelectQueryBuilder.For<Veiculo>()
+    .Where(v => v.IdCliente == 12 && v.Ativo);
+
+SelectQueryBuilder.For<Veiculo>()
+    .Where(v => !v.Ativo || v.Status == null);
+
+var ids = new[] { 10, 12, 15 };
+SelectQueryBuilder.For<Veiculo>()
+    .Where(v => ids.Contains(v.IdCliente));
+
+SelectQueryBuilder.For<Veiculo>()
+    .Where(v => ids.Any(id => id == v.IdCliente));
+
+SelectQueryBuilder.For<Veiculo>()
+    .Where(v => v.Status.Contains("bloq") || v.Status.StartsWith("off"));
+
+SelectQueryBuilder.For<Veiculo>()
+    .Where(v => !ids.Contains(v.IdCliente) && !v.Status.EndsWith("ado"));
+
+SelectQueryBuilder.For<Veiculo>()
+    .Where(v => v.Status != null && v.Status.Contains("bloq"));
+
+SelectQueryBuilder.For<Veiculo>()
+    .Where(v => (v.IdCliente == 12 || v.Ativo) && v.Status != "bloqueado");
+```
+
+#### SQL gerada pelas expressões
+
+Exemplo:
+
+```csharp
+SelectQueryBuilder.For<Veiculo>()
+    .Where(v => v.Status.Contains("bloq") || v.Status.StartsWith("off"));
+```
+
+SQL parametrizada:
+
+```sql
+SELECT * FROM `veiculo` WHERE `status` LIKE @p0 OR `status` LIKE @p1
+```
+
+Parâmetros:
+
+```csharp
+@p0 = "%bloq%"
+@p1 = "off%"
+```
+
+Versão de debug:
+
+```sql
+SELECT * FROM `veiculo` WHERE `status` LIKE '%bloq%' OR `status` LIKE 'off%'
+```
+
+Outros exemplos úteis:
+
+```csharp
+SelectQueryBuilder.For<Veiculo>()
+    .Where(v => ids.Contains(v.IdCliente));
+```
+
+```sql
+SELECT * FROM `veiculo` WHERE `id_cliente` IN (@p0, @p1, @p2)
+```
+
+```csharp
+SelectQueryBuilder.For<Veiculo>()
+    .Where(v => ids.Any(id => id == v.IdCliente));
+```
+
+```sql
+SELECT * FROM `veiculo` WHERE `id_cliente` IN (@p0, @p1, @p2)
+```
+
+```csharp
+SelectQueryBuilder.For<Veiculo>()
+    .Where(v => !ids.Contains(v.IdCliente) && !v.Status.EndsWith("ado"));
+```
+
+```sql
+SELECT * FROM `veiculo` WHERE `id_cliente` NOT IN (@p0, @p1, @p2) AND `status` NOT LIKE @p3
+```
+
+```csharp
+SelectQueryBuilder.For<Veiculo>()
+    .Where(v => v.Status != null && v.Status.Contains("bloq"));
+```
+
+```sql
+SELECT * FROM `veiculo` WHERE `status` IS NOT NULL AND `status` LIKE @p0
+```
+
+```csharp
+SelectQueryBuilder.For<Veiculo>()
+    .Where(v => (v.IdCliente == 12 || v.Ativo) && v.Status != "bloqueado");
+```
+
+```sql
+SELECT * FROM `veiculo` WHERE (`id_cliente` = @p0 OR `ativo` = @p1) AND `status` <> @p2
+```
+
+Regras de tradução aplicadas:
+
+- `campo.Contains("x")` -> `LIKE '%x%'`
+- `campo.StartsWith("x")` -> `LIKE 'x%'`
+- `campo.EndsWith("x")` -> `LIKE '%x'`
+- `lista.Contains(campo)` -> `IN (...)`
+- `!lista.Contains(campo)` -> `NOT IN (...)`
+- `lista.Any(x => x == campo)` -> `IN (...)`
+- `!lista.Any(x => x == campo)` -> `NOT IN (...)`
+- `campo != null` -> `IS NOT NULL`
+- `campo == null` -> `IS NULL`
+- parênteses na expressão são preservados na SQL gerada
+
+Observação:
+
+- os nomes da tabela e das colunas continuam respeitando `DbTable`, `DbField` e o fallback automático para `snake_case`
+- a execução real continua parametrizada; a versão "de debug" serve apenas para inspeção
+
+Hoje, essa tradução cobre bem:
+
+- comparações com `==`, `!=`, `>`, `>=`, `<`, `<=`
+- booleano direto, como `v.Ativo`
+- negação booleana, como `!v.Ativo`
+- comparações com `null`
+- `lista.Contains(v.Campo)` para gerar `IN (...)`
+- `!lista.Contains(v.Campo)` para gerar `NOT IN (...)`
+- `v.Campo.Contains("x")`, `StartsWith("x")` e `EndsWith("x")` para gerar `LIKE`
+- null-guard, como `v.Campo != null && v.Campo.Contains("x")`
+- composição com `&&` e `||`
+- agrupamentos com parênteses, como `(a || b) && c`
+
+O mesmo estilo também funciona nos builders genéricos de update e delete:
+
+```csharp
+UpdateQueryBuilder.For<Veiculo>()
+    .Where(v => v.IdCliente >= 10 && v.Status != "offline")
+    .Set("Status", "online");
+
+DeleteQueryBuilder.For<Veiculo>()
+    .Where(v => v.IdCliente == 99 || !v.Ativo);
+```
+
+Limitações atuais:
+
+- chamadas arbitrárias de método fora dos padrões suportados (`Contains`, `StartsWith`, `EndsWith`) ainda não são traduzidas automaticamente
+- o parser ainda não tenta converter expressões mais avançadas com subqueries, `Any`, `All`, agregações ou navegação entre objetos
+- quando a expressão sair do subconjunto suportado, prefira os métodos fluentes tradicionais (`Where`, `OrWhere`, `WhereRaw`, etc.)
+
 #### `Distinct`, `GroupBy` e `Having`
 
 Para cenários de agregação, o builder agora suporta `Distinct()`, `GroupBy(...)`, `Having(...)`, `HavingRaw(...)`, `OrHaving(...)` e `OrHavingRaw(...)`.

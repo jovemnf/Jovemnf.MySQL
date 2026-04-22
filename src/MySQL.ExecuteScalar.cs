@@ -60,8 +60,7 @@ public partial class MySQL
     /// <summary>
     /// Executa um comando e retorna um único valor de forma assíncrona (ExecuteScalar).
     /// </summary>
-    /// <param name="sql">Comando SQL a ser executado.</param>
-    /// <returns>Task com primeira coluna da primeira linha do resultado ou null.</returns>
+    /// <param name="sql">Comando SQL a ser executado.</param>    /// <returns>Task com primeira coluna da primeira linha do resultado ou null.</returns>
     public async Task<object> ExecuteScalarAsync(string sql)
     {
         if (string.IsNullOrEmpty(sql))

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
@@ -12,7 +13,7 @@ public class DeleteQueryBuilder
 {
     private string _tableName;
 
-    public static DeleteQueryBuilder For<T>() => new DeleteQueryBuilder<T>();
+    public static DeleteQueryBuilder<T> For<T>() => new DeleteQueryBuilder<T>();
 
     protected virtual string ResolveField(string field) => field;
     private readonly List<WhereCondition> _whereConditions = new List<WhereCondition>();
@@ -164,6 +165,30 @@ public class DeleteQueryBuilder
         return this;
     }
 
+    public DeleteQueryBuilder OrWhereIn<T>(string field, IEnumerable<T> values)
+    {
+        _whereConditions.Add(new WhereCondition
+        {
+            Field = ResolveField(field),
+            Values = values.Cast<object>().ToList(),
+            Operator = "IN",
+            Logic = "OR"
+        });
+        return this;
+    }
+
+    public DeleteQueryBuilder OrWhereNotIn<T>(string field, IEnumerable<T> values)
+    {
+        _whereConditions.Add(new WhereCondition
+        {
+            Field = ResolveField(field),
+            Values = values.Cast<object>().ToList(),
+            Operator = "NOT IN",
+            Logic = "OR"
+        });
+        return this;
+    }
+
     public DeleteQueryBuilder OrWhere(string field, object value, string op = "=")
     {
         ValidateOperator(op);
@@ -180,6 +205,30 @@ public class DeleteQueryBuilder
     public DeleteQueryBuilder OrWhere(string field, object value, QueryOperator op)
     {
         return OrWhere(field, value, op.ToSqlString());
+    }
+
+    public DeleteQueryBuilder WhereRaw(string sql, params object[] parameters)
+    {
+        _whereConditions.Add(new WhereCondition
+        {
+            RawSql = sql,
+            RawParameters = parameters,
+            Operator = "RAW",
+            Logic = "AND"
+        });
+        return this;
+    }
+
+    public DeleteQueryBuilder OrWhereRaw(string sql, params object[] parameters)
+    {
+        _whereConditions.Add(new WhereCondition
+        {
+            RawSql = sql,
+            RawParameters = parameters,
+            Operator = "RAW",
+            Logic = "OR"
+        });
+        return this;
     }
 
     public DeleteQueryBuilder WhereNull(string field)
@@ -312,6 +361,22 @@ public class DeleteQueryBuilder
         
     private string BuildWhereClause(WhereCondition condition, MySqlCommand command)
     {
+        if (condition.Operator == "RAW")
+        {
+            var sql = condition.RawSql;
+            if (condition.RawParameters != null)
+            {
+                for (int i = 0; i < condition.RawParameters.Length; i++)
+                {
+                    var paramName = GetNextParamName();
+                    sql = sql.Replace("{" + i + "}", $"@{paramName}");
+                    command.Parameters.AddWithValue($"@{paramName}", condition.RawParameters[i] ?? DBNull.Value);
+                }
+            }
+
+            return sql;
+        }
+
         switch (condition.Operator)
         {
             case "IS NULL":
@@ -356,6 +421,8 @@ public class DeleteQueryBuilder
         public List<object> Values { get; set; }
         public string Operator { get; set; }
         public string Logic { get; set; }
+        public string RawSql { get; set; }
+        public object[] RawParameters { get; set; }
     }
 }
 
@@ -380,6 +447,14 @@ public class DeleteQueryBuilder<T> : DeleteQueryBuilder
     public DeleteQueryBuilder()
     {
         Table(GetTableName<T>());
+    }
+
+    public DeleteQueryBuilder<T> Where(Expression<Func<T, bool>> predicate)
+    {
+        var translated = WhereExpressionTranslator.BuildRaw(predicate, ResolveField);
+        base.WhereRaw(translated.Sql, translated.Parameters);
+
+        return this;
     }
 
     protected override string ResolveField(string field)

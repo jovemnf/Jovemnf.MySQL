@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Globalization;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Reflection;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
@@ -17,7 +18,7 @@ public class SelectQueryBuilder
 {
     private string _tableName;
 
-    public static SelectQueryBuilder For<T>() => new SelectQueryBuilder<T>();
+    public static SelectQueryBuilder<T> For<T>() => new SelectQueryBuilder<T>();
     private List<SelectionField> _fields = new List<SelectionField>();
     private List<JoinClause> _joins = new List<JoinClause>();
     private List<WhereCondition> _whereConditions = new List<WhereCondition>();
@@ -275,6 +276,18 @@ public class SelectQueryBuilder
     public SelectQueryBuilder WhereNotIn<T>(string field, IEnumerable<T> values)
     {
         _whereConditions.Add(new WhereCondition { Field = ResolveField(field), Values = MaterializeValues(values), Operator = "NOT IN", Logic = "AND" });
+        return this;
+    }
+
+    public SelectQueryBuilder OrWhereIn<T>(string field, IEnumerable<T> values)
+    {
+        _whereConditions.Add(new WhereCondition { Field = ResolveField(field), Values = MaterializeValues(values), Operator = "IN", Logic = "OR" });
+        return this;
+    }
+
+    public SelectQueryBuilder OrWhereNotIn<T>(string field, IEnumerable<T> values)
+    {
+        _whereConditions.Add(new WhereCondition { Field = ResolveField(field), Values = MaterializeValues(values), Operator = "NOT IN", Logic = "OR" });
         return this;
     }
 
@@ -928,6 +941,14 @@ public class SelectQueryBuilder<T> : SelectQueryBuilder
     public SelectQueryBuilder()
     {
         Table(_resolvedTableName);
+    }
+
+    public SelectQueryBuilder<T> Where(Expression<Func<T, bool>> predicate)
+    {
+        var translated = WhereExpressionTranslator.BuildRaw(predicate, ResolveField);
+        base.WhereRaw(translated.Sql, translated.Parameters);
+
+        return this;
     }
 
     protected override string ResolveField(string field)
