@@ -2,6 +2,20 @@
 
 Pacote .NET Core de alto desempenho para interação simplificada com bancos de dados MySQL.
 
+## Sumário
+
+- [Instalação](#instalacao)
+- [Configuração de conexão](#configuracao)
+- [Builders fluentes](#builders-fluentes)
+- [Mapeamento e ORM](#mapeamento-e-orm)
+- [Operações avançadas](#operacoes-avancadas)
+- [DatabaseHelper](#databasehelper)
+- [Suporte espacial](#suporte-espacial)
+- [Testes](#testes)
+- [Troubleshooting](#troubleshooting)
+- [Segurança](#seguranca)
+- [Licença](#licenca)
+
 ## ✨ Características
 
 - **Gerenciamento de Conexão:** Fácil configuração via `MySQLConfiguration`.
@@ -13,7 +27,12 @@ Pacote .NET Core de alto desempenho para interação simplificada com bancos de 
 - **Suporte a Transações:** Execução atômica de múltiplas operações.
 - **Async/Await:** Suporte completo para operações assíncronas.
 - **Mapeamento Avançado:** Atributos `DbTable` e `DbField` para controle total sobre nomes de tabelas e colunas, com suporte a `snake_case`.
+- **Observabilidade e Cancelamento:** Overloads com `CancellationToken`, logging via `ILogger` e mascaramento de SQL com `MySQLOptions`.
+- **Bulk Operations:** `BulkInsertAsync`, `BulkUpsertAsync` e chunking configurável para grandes volumes.
+- **Paginação Estruturada:** `PageRequest` e `PagedResult<T>` com metadados de navegação.
+- **Tipos Espaciais:** Suporte a `Point`, `Polygon` e helpers geométricos úteis em cenários de rastreamento.
 
+<a id="instalacao"></a>
 ## 🚀 Instalação
 
 Adicione o pacote ao seu projeto:
@@ -24,12 +43,14 @@ dotnet add package Jovemnf.MySQL
 
 ## 📖 Como Usar
 
+<a id="configuracao"></a>
 ### Configuração de Conexão
 
 Você pode configurar a conexão usando o objeto `MySQLConfiguration`:
 
 ```csharp
 using Jovemnf.MySQL;
+using Jovemnf.MySQL.Configuration;
 
 var config = new MySQLConfiguration
 {
@@ -42,8 +63,33 @@ var config = new MySQLConfiguration
 };
 
 // Opcional: Inicializar configuração global
-MySQL.INIT(config);
+MySQL.Init(config);
 ```
+
+Também é possível configurar o pool globalmente:
+
+```csharp
+MySQL.Init(config, new PoolConfiguration
+{
+    MaxPoolSize = 200,
+    MinPoolSize = 10,
+    ConnectionTimeout = 15,
+    IdleTimeout = 180,
+    ConnectionLifeTime = 0,
+    ConnectionReset = false,
+    KeepaliveInterval = 30
+});
+```
+
+Se preferir, você também pode instanciar a conexão com connection string diretamente:
+
+```csharp
+var mysql = new MySQL("Server=localhost;Database=monitoramento;User ID=usuario;Password=senha;");
+await mysql.OpenAsync();
+```
+
+<a id="builders-fluentes"></a>
+## Builders Fluentes
 
 ### Consultas Padrão (Leitura)
 
@@ -249,6 +295,23 @@ await mysql.OpenAsync();
 
 int inserted = await mysql.BulkInsertAsync(veiculos, chunkSize: 500);
 int upserted = await mysql.BulkUpsertAsync(veiculos, new[] { "Status", "Placa" }, chunkSize: 500);
+int upsertedAllExcept = await mysql.BulkUpsertAllExceptAsync(veiculos, new[] { "Id" }, chunkSize: 500);
+```
+
+Se quiser definir o chunk padrão global ou por instância:
+
+```csharp
+var options = new MySQLOptions
+{
+    Bulk = new MySQLBulkOptions
+    {
+        DefaultChunkSize = 1000
+    }
+};
+
+using var mysql = new MySQL(config, options);
+await mysql.OpenAsync();
+await mysql.BulkInsertAsync(veiculos); // usa DefaultChunkSize = 1000
 ```
 
 ### Fluent Select Query Builder
@@ -492,6 +555,9 @@ var builder = new UpdateQueryBuilder()
 // Like, NotLike, IsNull, IsNotNull, In, NotIn, Between, Regexp, NotRegexp
 ```
 
+<a id="mapeamento-e-orm"></a>
+## Mapeamento e ORM
+
 ### Mapeamento Automático para Modelos (ORM)
 
 O `MySQLReader` permite mapear os resultados diretamente para classes C# (POCOs) usando reflexão. O mapeador é inteligente: ele ignora maiúsculas/minúsculas e também remove underscores ao comparar nomes de colunas com propriedades (ex: mapeia automaticamente a coluna `tipo_pessoa` para a propriedade `TipoPessoa`).
@@ -555,6 +621,24 @@ public sealed class VeiculoView
     public string Placa { get; set; }
 }
 ```
+
+#### Ignorando propriedades na serialização para insert/update
+
+Ao converter uma entidade para dicionário ou usar builders genéricos, você pode ignorar propriedades que não devem virar coluna:
+
+```csharp
+public sealed class PosicaoRastreador
+{
+    public int TrackerId { get; set; }
+    public double Latitude { get; set; }
+    public double Longitude { get; set; }
+
+    [IgnoreToDictionary]
+    public string StatusCalculadoEmMemoria { get; set; }
+}
+```
+
+Isso é útil para campos calculados na aplicação, dados transitórios e objetos auxiliares que não pertencem à tabela.
 
 #### Multi-mapping
 
@@ -694,6 +778,9 @@ var update = new UpdateQueryBuilder<Usuario>()
     .ToString();
 ```
 
+<a id="operacoes-avancadas"></a>
+## Operações Avançadas
+
 ### Execução com Resultados Detalhados
 
 Use o `UpdateQueryExecutor` para obter informações detalhadas sobre a execução:
@@ -746,20 +833,169 @@ using var mysql = new MySQL(config, options);
 
 Quando configurado, o logger recebe operação, tempo de execução, presença de transação, linhas afetadas e SQL para debug já mascarada.
 
+#### Configurando `MySQLOptions`
+
+As opções avançadas ficam centralizadas em `MySQLOptions`:
+
+```csharp
+var options = new MySQLOptions
+{
+    Logger = logger,
+    SqlMasker = sql => sql.Replace("token", "***"),
+    MutationProtection = new MySQLMutationProtectionOptions
+    {
+        RequireConfirmationForAllOperations = true,
+        RequireLimitForDeleteAllOperations = true,
+        RequireLimitForUpdateAllOperations = true
+    },
+    Bulk = new MySQLBulkOptions
+    {
+        DefaultChunkSize = 500
+    }
+};
+```
+
+Você pode aplicar essas opções por instância:
+
+```csharp
+using var mysql = new MySQL(config, options);
+```
+
+Ou num fluxo com `DatabaseHelper`:
+
+```csharp
+var helper = new DatabaseHelper(connectionString, options);
+```
+
+#### ExecuteScalar, health check e execução em lote
+
+Além dos builders, a classe `MySQL` também expõe utilitários diretos para cenários operacionais:
+
+```csharp
+using var mysql = new MySQL(config, options);
+await mysql.OpenAsync();
+
+var versao = await mysql.ExecuteScalarAsync("SELECT VERSION()", cancellationToken);
+bool conectado = await mysql.TestConnectionAsync(cancellationToken);
+
+int total = await mysql.ExecuteBatchAsync(
+    cancellationToken,
+    "UPDATE veiculos SET ativo = 1 WHERE tracker_id = 10",
+    "UPDATE veiculos SET ultima_leitura = NOW() WHERE tracker_id = 10");
+```
+
+Casos de uso típicos:
+- `ExecuteScalar*`: métricas, contagens rápidas e leitura de valores únicos.
+- `TestConnection*`: health checks de APIs, workers e serviços internos.
+- `ExecuteBatch*`: rotinas administrativas e scripts curtos executados na mesma transação.
+
+<a id="databasehelper"></a>
+## DatabaseHelper
+
+`DatabaseHelper` é útil quando você quer executar builders sem gerenciar a instância de `MySQL` manualmente.
+
+Exemplo básico:
+
+```csharp
+var helper = new DatabaseHelper(connectionString);
+
+int rows = await helper.ExecuteUpdateAsync(
+    new UpdateQueryBuilder()
+        .Table("veiculos")
+        .Set("status", "online")
+        .Where("tracker_id", 10));
+```
+
+Versão avançada com `MySQLOptions` e `CancellationToken`:
+
+```csharp
+var helper = new DatabaseHelper(connectionString, options);
+
+var pagina = await helper.PaginateAsync<Veiculo>(
+    SelectQueryBuilder.For<Veiculo>().Where("ativo", true),
+    new PageRequest(1, 100),
+    cancellationToken);
+
+await helper.WithTransactionAsync(async db =>
+{
+    await db.ExecuteUpdateAsync(updateBuilder, cancellationToken);
+    await db.ExecuteInsertAsync(insertBuilder, lastId: false, cancellationToken);
+}, cancellationToken);
+```
+
+O helper também oferece atalhos legados para cenários específicos:
+
+```csharp
+int atualizado = await helper.ExecuteUpdateWithTransactionAsync(async (connection, transaction) =>
+{
+    return new UpdateQueryBuilder()
+        .Table("rastreador_evento")
+        .Set("processado", true)
+        .Where("id", 123);
+});
+
+List<int> resultados = await helper.ExecuteMultipleUpdatesAsync(builder1, builder2, builder3);
+```
+
+<a id="suporte-espacial"></a>
+## Suporte Espacial
+
+Para sistemas de rastreamento veicular, o pacote também inclui tipos e helpers geométricos em `Jovemnf.MySQL.Geometry`.
+
+### `Point`
+
+```csharp
+using Jovemnf.MySQL.Geometry;
+
+var posicao = new Point(-23.5505, -46.6333); // latitude, longitude
+byte[] wkb = posicao.ToWKB();
+```
+
+### `Polygon`
+
+```csharp
+var cerca = new Polygon(new List<Point>
+{
+    new(-23.5500, -46.6340),
+    new(-23.5500, -46.6320),
+    new(-23.5510, -46.6320),
+    new(-23.5510, -46.6340)
+});
+
+string wkt = cerca.ToWKT();
+```
+
+### Helpers geométricos
+
+```csharp
+double distancia = origem.DistanceTo(destino);
+bool dentroDaCerca = posicao.IsInside(cerca);
+var pontosProximos = origem.PointsWithinRadius(listaDePontos, 500);
+var circulo = origem.CreateCircle(300);
+var boundingBox = origem.CreateBoundingBox(1000, 800);
+```
+
+Esses helpers são úteis para geofencing, proximidade, agrupamento e validações espaciais antes mesmo da persistência no banco.
+
+<a id="testes"></a>
 ### Testes
 
 O projeto inclui uma suíte de testes robustos focada em funcionalidade e segurança (SQL Injection).
 
 Para rodar os testes:
-1. Abra o projeto no **JetBrains Rider** ou **Visual Studio**.
-2. Navegue até o arquivo `src/TestRunner.cs`.
-3. Clique com o botão direito no método `Main` e selecione **Run**.
+1. Restaure os pacotes do projeto.
+2. Execute:
+
+```bash
+dotnet test MysqlTest/MysqlTest.csproj
+```
 
 Os testes validarão:
 - **Segurança:** Proteção contra SQL Injection em Tabelas, Colunas e Valores.
 - **Builders:** Geração correta de queries complexas (Joins, WhereIn, Between).
 - **Mapeamento:** Lógica de conversão de dados e nomes de colunas.
 
+<a id="troubleshooting"></a>
 ### Troubleshooting (Resolução de Problemas)
 
 **Erro: `NETSDK1004: Arquivo de ativos project.assets.json não encontrado`**
@@ -768,6 +1004,7 @@ Se você limpar o projeto ou clonar o repositório e ver este erro:
 2. Selecione **Restore NuGet Packages**.
 3. Aguarde o término e tente compilar novamente.
 
+<a id="seguranca"></a>
 ## 🔒 Segurança
 
 O pacote `Jovemnf.MySQL` prioriza a segurança dos seus dados:
@@ -785,6 +1022,7 @@ new UpdateQueryBuilder().Table("users").Set("active", false).Build();
 new UpdateQueryBuilder().Table("users").Set("active", false).All().Build();
 ```
 
+<a id="licenca"></a>
 ## 📄 Licença
 
 Este projeto está sob a licença [MIT](LICENSE).
