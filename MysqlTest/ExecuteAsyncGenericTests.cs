@@ -11,6 +11,7 @@ namespace MysqlTest;
 /// <summary>
 /// Testes para ExecuteAsync&lt;T&gt; nos builders Insert, Update, Delete e Select.
 /// </summary>
+[Collection(MutationProtectionTestCollection.Name)]
 public class ExecuteAsyncGenericTests
 {
     private static MySQL CreateConnection() => new MySQL(new MySQLConfiguration

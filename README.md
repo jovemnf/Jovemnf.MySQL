@@ -9,6 +9,7 @@ Pacote .NET Core de alto desempenho para interação simplificada com bancos de 
 - [Builders fluentes](#builders-fluentes)
 - [Mapeamento e ORM](#mapeamento-e-orm)
 - [Operações avançadas](#operacoes-avancadas)
+- [Paginação](#paginacao)
 - [DatabaseHelper](#databasehelper)
 - [Suporte espacial](#suporte-espacial)
 - [Testes](#testes)
@@ -426,6 +427,33 @@ SelectQueryBuilder.For<Veiculo>()
 SELECT * FROM `veiculo` WHERE `id_cliente` IN (@p0, @p1, @p2)
 ```
 
+Quando o predicate do `Any` não é uma igualdade simples, o builder expande para `OR` parametrizado:
+
+```csharp
+var ids = new[] { 10, 20 };
+
+SelectQueryBuilder.For<Veiculo>()
+    .Where(v => ids.Any(id => id > v.IdCliente));
+```
+
+```sql
+SELECT * FROM `veiculo` WHERE `id_cliente` < @p0 OR `id_cliente` < @p1
+```
+
+```csharp
+SelectQueryBuilder.For<Veiculo>()
+    .Where(v => !ids.Any(id => id > v.IdCliente));
+```
+
+```sql
+SELECT * FROM `veiculo` WHERE NOT (`id_cliente` < @p0 OR `id_cliente` < @p1)
+```
+
+Casos especiais:
+
+- coleção vazia em `Any(...)` gera `WHERE 1 = 0`
+- coleção vazia em `!Any(...)` gera `WHERE 1 = 1`
+
 ```csharp
 SelectQueryBuilder.For<Veiculo>()
     .Where(v => !ids.Contains(v.IdCliente) && !v.Status.EndsWith("ado"));
@@ -559,15 +587,15 @@ Também há overloads como:
 
 #### Paginação estruturada
 
-Além de `Limit(...)`, você pode usar paginação estruturada com metadados:
+Além de `Limit(...)`, você pode usar paginação estruturada com metadados de navegação através de `PageRequest` e `PagedResult<T>`. Veja a seção [Paginação](#paginacao) para detalhes completos.
 
 ```csharp
 using var mysql = new MySQL(config);
 await mysql.OpenAsync();
 
-var page = await mysql.PaginateAsync<Veiculo>(
-    SelectQueryBuilder.For<Veiculo>().Where("ativo", true),
-    new PageRequest(page: 2, pageSize: 50));
+var page = await SelectQueryBuilder.For<Veiculo>()
+    .Where("ativo", true)
+    .PaginateAsync<Veiculo>(mysql, new PageRequest(page: 2, pageSize: 50));
 
 Console.WriteLine(page.TotalItems);
 Console.WriteLine(page.HasNextPage);
@@ -1051,6 +1079,167 @@ Casos de uso típicos:
 - `ExecuteScalar*`: métricas, contagens rápidas e leitura de valores únicos.
 - `TestConnection*`: health checks de APIs, workers e serviços internos.
 - `ExecuteBatch*`: rotinas administrativas e scripts curtos executados na mesma transação.
+
+<a id="paginacao"></a>
+## Paginação
+
+O pacote oferece paginação estruturada com metadados de navegação através de dois tipos simples definidos em `Jovemnf.MySQL`:
+
+### `PageRequest`
+
+Representa a requisição de uma página. É um `readonly struct` com validação no construtor:
+
+```csharp
+public readonly struct PageRequest(int page, int pageSize)
+{
+    public int Page { get; }       // número da página (>= 1)
+    public int PageSize { get; }   // itens por página (>= 1)
+    public int Offset => (Page - 1) * PageSize; // offset calculado automaticamente
+}
+```
+
+Uso:
+
+```csharp
+var request = new PageRequest(page: 1, pageSize: 50);
+// request.Offset -> 0
+
+var request2 = new PageRequest(3, 20);
+// request2.Offset -> 40
+```
+
+> Passar `page < 1` ou `pageSize < 1` lança `ArgumentOutOfRangeException`.
+
+### `PagedResult<T>`
+
+Representa o resultado paginado com os itens e todos os metadados de navegação prontos:
+
+```csharp
+public sealed class PagedResult<T>
+{
+    public IReadOnlyList<T> Items { get; init; }
+    public long TotalItems { get; init; }
+    public int Page { get; init; }
+    public int PageSize { get; init; }
+    public int TotalPages { get; }       // ceil(TotalItems / PageSize)
+    public bool HasNextPage { get; }     // Page < TotalPages
+    public bool HasPreviousPage { get; } // Page > 1
+}
+```
+
+### Executando via `MySQL`
+
+Você pode encadear `PaginateAsync<T>` direto no `SelectQueryBuilder`, no mesmo estilo do `ExecuteAsync<T>`:
+
+```csharp
+using Jovemnf.MySQL;
+using Jovemnf.MySQL.Builder;
+
+using var mysql = new MySQL(config);
+await mysql.OpenAsync();
+
+PagedResult<Veiculo> pagina = await SelectQueryBuilder.For<Veiculo>()
+    .Where("ativo", true)
+    .OrderBy("placa")
+    .PaginateAsync<Veiculo>(mysql, new PageRequest(page: 2, pageSize: 50));
+
+Console.WriteLine($"Página {pagina.Page} de {pagina.TotalPages}");
+Console.WriteLine($"Total de itens: {pagina.TotalItems}");
+Console.WriteLine($"Tem próxima? {pagina.HasNextPage}");
+Console.WriteLine($"Tem anterior? {pagina.HasPreviousPage}");
+
+foreach (var veiculo in pagina.Items)
+{
+    Console.WriteLine(veiculo.Placa);
+}
+```
+
+Se preferir, a forma tradicional (chamando a partir do `MySQL`) continua funcionando:
+
+```csharp
+var builder = SelectQueryBuilder.For<Veiculo>()
+    .Where("ativo", true)
+    .OrderBy("placa");
+
+PagedResult<Veiculo> pagina = await mysql.PaginateAsync<Veiculo>(
+    builder,
+    new PageRequest(page: 2, pageSize: 50));
+```
+
+### Executando via `DatabaseHelper`
+
+Quando não quiser gerenciar a instância de `MySQL` manualmente, também dá para encadear no builder:
+
+```csharp
+var helper = new DatabaseHelper(connectionString);
+
+var pagina = await SelectQueryBuilder.For<Veiculo>()
+    .Where("ativo", true)
+    .OrderBy("placa")
+    .PaginateAsync<Veiculo>(helper, new PageRequest(1, 100), cancellationToken);
+```
+
+Ou na forma tradicional:
+
+```csharp
+var pagina = await helper.PaginateAsync<Veiculo>(
+    SelectQueryBuilder.For<Veiculo>().Where("ativo", true),
+    new PageRequest(1, 100),
+    cancellationToken);
+```
+
+### Exemplo prático em uma API
+
+```csharp
+[HttpGet("veiculos")]
+public async Task<IActionResult> Listar(int page = 1, int pageSize = 20, CancellationToken ct = default)
+{
+    var builder = SelectQueryBuilder.For<Veiculo>()
+        .Where("id_cliente", ClienteAtualId)
+        .OrderBy("placa");
+
+    var pagina = await _helper.PaginateAsync<Veiculo>(
+        builder,
+        new PageRequest(page, pageSize),
+        ct);
+
+    return Ok(new
+    {
+        items = pagina.Items,
+        page = pagina.Page,
+        pageSize = pagina.PageSize,
+        totalItems = pagina.TotalItems,
+        totalPages = pagina.TotalPages,
+        hasNextPage = pagina.HasNextPage,
+        hasPreviousPage = pagina.HasPreviousPage
+    });
+}
+```
+
+### Como funciona internamente
+
+- O `PaginateAsync<T>` executa duas queries na mesma conexão:
+  1. Um `SELECT COUNT(*)` derivado do seu `SelectQueryBuilder` para obter `TotalItems`.
+  2. O `SELECT` original com `LIMIT {PageSize} OFFSET {Offset}` para obter `Items`.
+- Os filtros (`Where`, `WhereIn`, `Join`, etc.) e o `OrderBy` do builder são respeitados.
+- Defina um `OrderBy` estável (ex: chave primária) para garantir ordem previsível entre páginas.
+
+### Dicas
+
+- Use `PageSize` com limites razoáveis (ex: 10, 20, 50, 100) para evitar resultados gigantes.
+- Combine com `Select<T>()` para projetar apenas as colunas necessárias no listing:
+
+```csharp
+var builder = SelectQueryBuilder.For<Veiculo>()
+    .Select<VehicleListItem>()
+    .Where("cancelado", false);
+
+var pagina = await mysql.PaginateAsync<VehicleListItem>(
+    builder,
+    new PageRequest(1, 50));
+```
+
+- Em endpoints HTTP, passe sempre o `CancellationToken` da requisição para permitir cancelamento cooperativo.
 
 <a id="databasehelper"></a>
 ## DatabaseHelper

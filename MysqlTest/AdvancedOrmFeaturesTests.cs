@@ -11,6 +11,7 @@ using Xunit;
 
 namespace MysqlTest;
 
+[Collection(MutationProtectionTestCollection.Name)]
 public class AdvancedOrmFeaturesTests
 {
     [Fact]

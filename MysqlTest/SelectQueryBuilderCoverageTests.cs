@@ -72,6 +72,89 @@ public class SelectQueryBuilderCoverageTests
     }
 
     [Fact]
+    public async Task Select_PaginateAsync_MySQL_ThrowsWhenConnectionNull()
+    {
+        var builder = new SelectQueryBuilder()
+            .Table("veiculos");
+
+        var ex = await Assert.ThrowsAsync<ArgumentNullException>(() =>
+            builder.PaginateAsync<Veiculo>((MySQL)null!, new PageRequest(1, 10)));
+
+        Assert.Equal("connection", ex.ParamName);
+    }
+
+    [Fact]
+    public async Task Select_PaginateAsync_MySQL_ThrowsWhenTableNull()
+    {
+        var builder = new SelectQueryBuilder();
+        await using var conn = CreateConnection();
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            builder.PaginateAsync<Veiculo>(conn, new PageRequest(1, 10)));
+
+        Assert.Equal("Tabela não especificada", ex.Message);
+    }
+
+    [Fact]
+    public void Select_PaginateAsync_MySQL_ReturnsTask()
+    {
+        var builder = new SelectQueryBuilder()
+            .Table("veiculos")
+            .Where("ativo", true);
+        using var conn = CreateConnection();
+
+        var task = builder.PaginateAsync<Veiculo>(conn, new PageRequest(2, 50));
+
+        Assert.NotNull(task);
+        Assert.IsAssignableFrom<Task<PagedResult<Veiculo>>>(task);
+    }
+
+    [Fact]
+    public async Task Select_PaginateAsync_DatabaseHelper_ThrowsWhenHelperNull()
+    {
+        var builder = new SelectQueryBuilder()
+            .Table("veiculos");
+
+        var ex = await Assert.ThrowsAsync<ArgumentNullException>(() =>
+            builder.PaginateAsync<Veiculo>((DatabaseHelper)null!, new PageRequest(1, 10)));
+
+        Assert.Equal("helper", ex.ParamName);
+    }
+
+    [Fact]
+    public async Task Select_PaginateAsync_DatabaseHelper_ThrowsWhenTableNull()
+    {
+        var builder = new SelectQueryBuilder();
+        var helper = new DatabaseHelper("Server=localhost;Database=test;User ID=root;Password=password;");
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            builder.PaginateAsync<Veiculo>(helper, new PageRequest(1, 10)));
+
+        Assert.Equal("Tabela não especificada", ex.Message);
+    }
+
+    [Fact]
+    public void Select_PaginateAsync_DatabaseHelper_ReturnsTask()
+    {
+        var builder = new SelectQueryBuilder()
+            .Table("veiculos")
+            .Where("ativo", true);
+        var helper = new DatabaseHelper("Server=localhost;Database=test;User ID=root;Password=password;");
+
+        var task = builder.PaginateAsync<Veiculo>(helper, new PageRequest(2, 50));
+
+        Assert.NotNull(task);
+        Assert.IsAssignableFrom<Task<PagedResult<Veiculo>>>(task);
+    }
+
+    private sealed class Veiculo
+    {
+        public int Id { get; set; }
+        public string Placa { get; set; } = string.Empty;
+        public bool Ativo { get; set; }
+    }
+
+    [Fact]
     public void Select_ExistsSync_ThrowsWhenConnectionNull()
     {
         var builder = new SelectQueryBuilder()

@@ -682,21 +682,82 @@ internal static class WhereExpressionTranslator
         bool isNegated,
         out string sql)
     {
-        if (!TryTranslateEnumerableAny(expression, isNegated, out var condition))
+        if (!string.Equals(expression.Method.Name, "Any", StringComparison.Ordinal) ||
+            expression.Arguments.Count != 2)
         {
             sql = null;
             return false;
         }
 
-        var placeholderIndexes = new List<string>();
-        foreach (var value in (IEnumerable)condition.Value)
+        var lambdaExpression = StripQuote(expression.Arguments[1]) as LambdaExpression;
+        if (lambdaExpression == null || lambdaExpression.Parameters.Count != 1)
         {
-            var index = AddParameter(parameters, value);
-            placeholderIndexes.Add($"{{{index}}}");
+            sql = null;
+            return false;
         }
 
-        sql = $"{EscapeIdentifier(resolveField(condition.Field))} {(isNegated ? "NOT IN" : "IN")} ({string.Join(", ", placeholderIndexes)})";
+        if (!TryEvaluateValue(expression.Arguments[0], out var valuesObject) ||
+            valuesObject is not IEnumerable enumerable ||
+            valuesObject is string)
+        {
+            sql = null;
+            return false;
+        }
+
+        // Optimization: ids.Any(x => x == v.Field) -> IN (...)
+        if (TryTranslateEnumerableAny(expression, isNegated, out var condition))
+        {
+            var placeholderIndexes = new List<string>();
+            foreach (var value in (IEnumerable)condition.Value)
+            {
+                var index = AddParameter(parameters, value);
+                placeholderIndexes.Add($"{{{index}}}");
+            }
+
+            sql = $"{EscapeIdentifier(resolveField(condition.Field))} {(isNegated ? "NOT IN" : "IN")} ({string.Join(", ", placeholderIndexes)})";
+            return true;
+        }
+
+        // General case: expand to OR of substituted predicates
+        var parameter = lambdaExpression.Parameters[0];
+        var clauses = new List<string>();
+
+        foreach (var item in enumerable)
+        {
+            var constant = Expression.Constant(item, parameter.Type);
+            var substituted = new ParameterReplaceVisitor(parameter, constant).Visit(lambdaExpression.Body);
+            var translated = TranslateRaw(substituted, resolveField, parameters);
+            clauses.Add(translated.Precedence < GetPrecedence(ExpressionType.OrElse)
+                ? $"({translated.Sql})"
+                : translated.Sql);
+        }
+
+        if (clauses.Count == 0)
+        {
+            sql = isNegated ? "1 = 1" : "1 = 0";
+            return true;
+        }
+
+        var body = string.Join(" OR ", clauses);
+        sql = isNegated ? $"NOT ({body})" : body;
         return true;
+    }
+
+    private sealed class ParameterReplaceVisitor : ExpressionVisitor
+    {
+        private readonly ParameterExpression _parameter;
+        private readonly Expression _replacement;
+
+        public ParameterReplaceVisitor(ParameterExpression parameter, Expression replacement)
+        {
+            _parameter = parameter;
+            _replacement = replacement;
+        }
+
+        protected override Expression VisitParameter(ParameterExpression node)
+        {
+            return node == _parameter ? _replacement : base.VisitParameter(node);
+        }
     }
 
     private static int AddParameter(List<object> parameters, object value)

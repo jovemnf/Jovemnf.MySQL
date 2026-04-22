@@ -121,6 +121,35 @@ public class SelectQueryBuilder
     }
 
     /// <summary>
+    /// Executa o SELECT com paginação estruturada e retorna um <see cref="PagedResult{T}"/>
+    /// contendo os itens da página e metadados de navegação (total, páginas, HasNextPage, etc.).
+    /// </summary>
+    /// <typeparam name="T">Tipo do modelo (deve ter construtor sem parâmetros e propriedades mapeáveis).</typeparam>
+    /// <param name="connection">Conexão MySQL.</param>
+    /// <param name="request">Requisição de página (<see cref="PageRequest"/>) com <c>Page</c> e <c>PageSize</c>.</param>
+    /// <param name="cancellationToken">Token de cancelamento cooperativo.</param>
+    /// <returns>Resultado paginado contendo os itens e metadados.</returns>
+    public Task<PagedResult<T>> PaginateAsync<T>(MySQL connection, PageRequest request, CancellationToken cancellationToken = default) where T : new()
+    {
+        ArgumentNullException.ThrowIfNull(connection);
+        if (_tableName == null)
+            throw new InvalidOperationException("Tabela não especificada");
+        return connection.PaginateAsync<T>(this, request, cancellationToken);
+    }
+
+    /// <summary>
+    /// Executa o SELECT com paginação estruturada usando um <see cref="DatabaseHelper"/>
+    /// (que gerencia a conexão automaticamente).
+    /// </summary>
+    public Task<PagedResult<T>> PaginateAsync<T>(DatabaseHelper helper, PageRequest request, CancellationToken cancellationToken = default) where T : new()
+    {
+        ArgumentNullException.ThrowIfNull(helper);
+        if (_tableName == null)
+            throw new InvalidOperationException("Tabela não especificada");
+        return helper.PaginateAsync<T>(this, request, cancellationToken);
+    }
+
+    /// <summary>
     /// Verifica se existe pelo menos um registro que atenda aos filtros informados.
     /// </summary>
     public bool ExistsSync(MySQL connection)

@@ -9,6 +9,7 @@ using Xunit;
 
 namespace MysqlTest;
 
+[Collection(MutationProtectionTestCollection.Name)]
 public class MutationBuildersCoverageTests
 {
     private static MySQL CreateConnection() => new MySQL(new MySQLConfiguration
