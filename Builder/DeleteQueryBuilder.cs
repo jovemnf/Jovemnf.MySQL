@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Threading;
 using System.Threading.Tasks;
 using MySqlConnector;
 
@@ -17,6 +18,7 @@ public class DeleteQueryBuilder
     private readonly List<WhereCondition> _whereConditions = new List<WhereCondition>();
     private int _paramCounter = 0;
     private bool _allowAll = false;
+    private bool _confirmedMassOperation = false;
     private int? _limit;
 
     private static readonly HashSet<string> AllowedOperators = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -30,6 +32,12 @@ public class DeleteQueryBuilder
     public DeleteQueryBuilder All()
     {
         _allowAll = true;
+        return this;
+    }
+
+    public DeleteQueryBuilder ConfirmMassOperation()
+    {
+        _confirmedMassOperation = true;
         return this;
     }
 
@@ -47,6 +55,14 @@ public class DeleteQueryBuilder
         return connection.ExecuteDeleteAsync(this);
     }
 
+    public Task<int> ExecuteAsync(MySQL connection, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(connection);
+        if (_tableName == null)
+            throw new InvalidOperationException("Tabela não especificada");
+        return connection.ExecuteDeleteAsync(this, cancellationToken);
+    }
+
     /// <summary>
     /// Executa o DELETE e retorna as linhas que foram removidas mapeadas para o tipo T (SELECT antes do DELETE).
     /// Não suportado quando All() foi usado; nesse caso use ExecuteAsync(connection).
@@ -60,6 +76,14 @@ public class DeleteQueryBuilder
         if (_tableName == null) 
             throw new InvalidOperationException("Tabela não especificada");
         return connection.ExecuteDeleteAsync<T>(this);
+    }
+
+    public Task<List<T>> ExecuteAsync<T>(MySQL connection, CancellationToken cancellationToken) where T : new()
+    {
+        ArgumentNullException.ThrowIfNull(connection);
+        if (_tableName == null)
+            throw new InvalidOperationException("Tabela não especificada");
+        return connection.ExecuteDeleteAsync<T>(this, cancellationToken);
     }
 
     /// <summary>
@@ -219,6 +243,13 @@ public class DeleteQueryBuilder
             
         if (_whereConditions.Count == 0 && !_allowAll)
             throw new InvalidOperationException("Nenhuma condição WHERE definida. Use .All() se realmente deseja deletar todas as linhas.");
+
+        var protection = MySQL.DefaultOptions.MutationProtection;
+        if (_allowAll && protection.RequireConfirmationForAllOperations && !_confirmedMassOperation)
+            throw new InvalidOperationException("Operação em massa requer confirmação explícita. Use .ConfirmMassOperation().");
+
+        if (_allowAll && protection.RequireLimitForDeleteAllOperations && !_limit.HasValue)
+            throw new InvalidOperationException("Operações DELETE em massa exigem LIMIT configurado pelas opções globais.");
 
         var command = new MySqlCommand();
             

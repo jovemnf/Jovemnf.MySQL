@@ -10,6 +10,7 @@ using System.Reflection;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading;
 
 namespace Jovemnf.MySQL;
 
@@ -825,14 +826,14 @@ public class MySQLReader(DbDataReader dr) : IDisposable, IAsyncDisposable
     /// Avança o reader para a próxima linha de forma assíncrona.
     /// </summary>
     /// <returns>Task com True se há mais linhas, caso contrário False.</returns>
-    public async Task<bool> ReadAsync()
+    public async Task<bool> ReadAsync(CancellationToken cancellationToken = default)
     {
         if (_dr == null)
             throw new InvalidOperationException("Reader não foi inicializado.");
 
         try
         {
-            return await this._dr.ReadAsync();
+            return await this._dr.ReadAsync(cancellationToken);
         }
         catch (Exception ex)
         {
@@ -897,7 +898,7 @@ public class MySQLReader(DbDataReader dr) : IDisposable, IAsyncDisposable
     /// Obtém todas as linhas do resultado como uma lista de dicionários de forma assíncrona.
     /// </summary>
     /// <returns>Task com lista de dicionários, onde cada dicionário representa uma linha.</returns>
-    public async Task<List<Dictionary<string, object>>> ToListAsync()
+    public async Task<List<Dictionary<string, object>>> ToListAsync(CancellationToken cancellationToken = default)
     {
         var list = new List<Dictionary<string, object>>();
         if (_dr == null)
@@ -905,7 +906,7 @@ public class MySQLReader(DbDataReader dr) : IDisposable, IAsyncDisposable
 
         try
         {
-            while (await _dr.ReadAsync())
+            while (await _dr.ReadAsync(cancellationToken))
             {
                 var dict = new Dictionary<string, object>();
                 for (int i = 0; i < _dr.FieldCount; i++)
@@ -932,10 +933,10 @@ public class MySQLReader(DbDataReader dr) : IDisposable, IAsyncDisposable
         return (T)ToModel(typeof(T));
     }
 
-    private object ToModel(Type modelType)
+    private object ToModel(Type modelType, IReadOnlyList<string> selectedColumns = null)
     {
         var properties = modelType.GetProperties(BindingFlags.Public | BindingFlags.Instance);
-        var columns = GetColumnNames();
+        var columns = selectedColumns ?? GetColumnNames();
         var parameterlessCtor = modelType.GetConstructor(Type.EmptyTypes);
         var constructorBoundProperties = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         object model;
@@ -989,7 +990,7 @@ public class MySQLReader(DbDataReader dr) : IDisposable, IAsyncDisposable
 
             try
             {
-                var convertedValue = ConvertValue(val, prop.PropertyType);
+                var convertedValue = ConvertValue(val, prop.PropertyType, prop);
                 if (convertedValue != null || CanAssignNull(prop.PropertyType))
                 {
                     prop.SetValue(model, convertedValue);
@@ -1062,7 +1063,7 @@ public class MySQLReader(DbDataReader dr) : IDisposable, IAsyncDisposable
             return Activator.CreateInstance(parameter.ParameterType);
         }
 
-        return ConvertValue(value, parameter.ParameterType);
+        return ConvertValue(value, parameter.ParameterType, parameter, property);
     }
 
     private string FindMatchingColumnName(IReadOnlyList<string> columns, PropertyInfo property)
@@ -1116,8 +1117,17 @@ public class MySQLReader(DbDataReader dr) : IDisposable, IAsyncDisposable
         return parameter.Name ?? string.Empty;
     }
 
-    private object ConvertValue(object val, Type targetType)
+    private object ConvertValue(object val, Type targetType, MemberInfo member = null, PropertyInfo property = null)
     {
+        if (property != null && MySQLValueConverterRegistry.TryConvert(property, targetType, val, out var memberConvertedValue))
+            return memberConvertedValue;
+
+        if (member != null && MySQLValueConverterRegistry.TryConvert(member, targetType, val, out memberConvertedValue))
+            return memberConvertedValue;
+
+        if (MySQLValueConverterRegistry.TryConvert(targetType, val, out var registeredConvertedValue))
+            return registeredConvertedValue;
+
         var propType = Nullable.GetUnderlyingType(targetType) ?? targetType;
         object convertedValue = TryParse.ChangeType(val, propType);
 
@@ -1186,6 +1196,20 @@ public class MySQLReader(DbDataReader dr) : IDisposable, IAsyncDisposable
         return Convert.ChangeType(val, propType);
     }
 
+    private object ConvertValue(object val, Type targetType, ParameterInfo parameter, PropertyInfo property)
+    {
+        if (property != null && MySQLValueConverterRegistry.TryConvert(property, targetType, val, out var propertyConvertedValue))
+            return propertyConvertedValue;
+
+        if (parameter != null && MySQLValueConverterRegistry.TryConvert(parameter, targetType, val, out var parameterConvertedValue))
+            return parameterConvertedValue;
+
+        if (MySQLValueConverterRegistry.TryConvert(targetType, val, out var registeredConvertedValue))
+            return registeredConvertedValue;
+
+        return ConvertValue(val, targetType);
+    }
+
     private bool CanAssignNull(Type type)
     {
         return !type.IsValueType || Nullable.GetUnderlyingType(type) != null;
@@ -1251,12 +1275,12 @@ public class MySQLReader(DbDataReader dr) : IDisposable, IAsyncDisposable
     /// </summary>
     /// <typeparam name="T">O tipo do modelo.</typeparam>
     /// <returns>Task com lista de instâncias de T.</returns>
-    public async Task<List<T>> ToModelListAsync<T>()
+    public async Task<List<T>> ToModelListAsync<T>(CancellationToken cancellationToken = default)
     {
         var list = new List<T>();
         try
         {
-            while (await ReadAsync())
+            while (await ReadAsync(cancellationToken))
             {
                 list.Add(ToModel<T>());
             }
@@ -1267,6 +1291,79 @@ public class MySQLReader(DbDataReader dr) : IDisposable, IAsyncDisposable
         }
 
         return list;
+    }
+
+    public List<TResult> ToMultiMapList<TFirst, TSecond, TResult>(Func<TFirst, TSecond, TResult> map, string splitOn = "id")
+    {
+        ArgumentNullException.ThrowIfNull(map);
+        var list = new List<TResult>();
+        var columns = GetColumnNames();
+        var splitIndex = ResolveSplitIndex(columns, splitOn);
+        var firstColumns = columns.Take(splitIndex).ToArray();
+        var secondColumns = columns.Skip(splitIndex).ToArray();
+
+        try
+        {
+            while (Read())
+            {
+                var first = (TFirst)ToModel(typeof(TFirst), firstColumns);
+                var second = (TSecond)ToModel(typeof(TSecond), secondColumns);
+                list.Add(map(first, second));
+            }
+        }
+        catch
+        {
+            // ignored
+        }
+
+        return list;
+    }
+
+    public async Task<List<TResult>> ToMultiMapListAsync<TFirst, TSecond, TResult>(
+        Func<TFirst, TSecond, TResult> map,
+        string splitOn = "id",
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(map);
+        var list = new List<TResult>();
+        var columns = GetColumnNames();
+        var splitIndex = ResolveSplitIndex(columns, splitOn);
+        var firstColumns = columns.Take(splitIndex).ToArray();
+        var secondColumns = columns.Skip(splitIndex).ToArray();
+
+        try
+        {
+            while (await ReadAsync(cancellationToken))
+            {
+                var first = (TFirst)ToModel(typeof(TFirst), firstColumns);
+                var second = (TSecond)ToModel(typeof(TSecond), secondColumns);
+                list.Add(map(first, second));
+            }
+        }
+        catch
+        {
+            // ignored
+        }
+
+        return list;
+    }
+
+    private static int ResolveSplitIndex(IReadOnlyList<string> columns, string splitOn)
+    {
+        if (columns.Count < 2)
+            throw new InvalidOperationException("Multi-mapping requer pelo menos duas colunas.");
+
+        for (var i = 1; i < columns.Count; i++)
+        {
+            var column = columns[i];
+            if (string.Equals(column, splitOn, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(column.Replace("_", ""), splitOn.Replace("_", ""), StringComparison.OrdinalIgnoreCase))
+            {
+                return i;
+            }
+        }
+
+        throw new InvalidOperationException($"Não foi possível localizar a coluna de split '{splitOn}'.");
     }
 }
 

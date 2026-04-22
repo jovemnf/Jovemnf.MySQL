@@ -6,7 +6,7 @@ using MySqlConnector;
 
 namespace Jovemnf.MySQL
 {
-    public class DatabaseHelper
+    public partial class DatabaseHelper
     {
         private readonly string _connectionString;
 

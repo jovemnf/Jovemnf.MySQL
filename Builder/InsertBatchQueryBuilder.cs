@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Reflection;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Jovemnf.MySQL.Geometry;
 using MySqlConnector;
@@ -124,6 +125,17 @@ public class InsertBatchQueryBuilder
             throw new InvalidOperationException("Nenhuma linha para inserir");
 
         return connection.ExecuteInsertBatchAsync(this);
+    }
+
+    public Task<int> ExecuteAsync(MySQL connection, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(connection);
+        if (_tableName == null)
+            throw new InvalidOperationException("Tabela não especificada");
+        if (_rows.Count == 0)
+            throw new InvalidOperationException("Nenhuma linha para inserir");
+
+        return connection.ExecuteInsertBatchAsync(this, cancellationToken);
     }
 
     public (string Sql, MySqlCommand Command) Build()

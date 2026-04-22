@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Reflection;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Jovemnf.MySQL.Geometry;
 using MySqlConnector;
@@ -13,6 +14,9 @@ public class InsertQueryBuilder
 {
     private string _tableName;
     private readonly Dictionary<string, object> _fields = new();
+    private readonly HashSet<string> _duplicateUpdateFields = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _duplicateExcludedFields = new(StringComparer.OrdinalIgnoreCase);
+    private bool _updateAllExcept;
     private int _paramCounter = 0;
 
     public static InsertQueryBuilder For<T>() => new InsertQueryBuilder<T>();
@@ -61,6 +65,17 @@ public class InsertQueryBuilder
         return connection.ExecuteInsertAsync(this);
     }
 
+    public Task<long> ExecuteAsync(MySQL connection, bool lastId, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(connection);
+        if (_tableName == null)
+            throw new InvalidOperationException("Tabela não especificada");
+        if (_fields.Count == 0)
+            throw new InvalidOperationException("Nenhum campo para inserir");
+
+        return connection.ExecuteInsertAsync(this, lastId, cancellationToken);
+    }
+
     /// <summary>
     /// Executa o INSERT e retorna a linha inserida mapeada para o tipo T (via LAST_INSERT_ID + SELECT).
     /// Assume que a tabela possui coluna de chave primária "id" auto-incremento.
@@ -77,6 +92,17 @@ public class InsertQueryBuilder
             throw new InvalidOperationException("Nenhum campo para inserir");
 
         return connection.ExecuteInsertAsync<T>(this);
+    }
+
+    public Task<T> ExecuteAsync<T>(MySQL connection, CancellationToken cancellationToken) where T : new()
+    {
+        ArgumentNullException.ThrowIfNull(connection);
+        if (_tableName == null)
+            throw new InvalidOperationException("Tabela não especificada");
+        if (_fields.Count == 0)
+            throw new InvalidOperationException("Nenhum campo para inserir");
+
+        return connection.ExecuteInsertAsync<T>(this, cancellationToken);
     }
 
     /// <summary>
@@ -185,6 +211,40 @@ public class InsertQueryBuilder
         return this;
     }
 
+    public InsertQueryBuilder OnDuplicateKeyUpdate(params string[] fields)
+    {
+        ArgumentNullException.ThrowIfNull(fields);
+        if (fields.Length == 0)
+            throw new InvalidOperationException("Informe ao menos um campo para atualizar em caso de chave duplicada.");
+
+        _updateAllExcept = false;
+        _duplicateUpdateFields.Clear();
+        _duplicateExcludedFields.Clear();
+        foreach (var field in fields)
+        {
+            _duplicateUpdateFields.Add(ResolveField(field));
+        }
+
+        return this;
+    }
+
+    public InsertQueryBuilder OnDuplicateKeyUpdateAllExcept(params string[] excludedFields)
+    {
+        _updateAllExcept = true;
+        _duplicateUpdateFields.Clear();
+        _duplicateExcludedFields.Clear();
+
+        if (excludedFields != null)
+        {
+            foreach (var field in excludedFields)
+            {
+                _duplicateExcludedFields.Add(ResolveField(field));
+            }
+        }
+
+        return this;
+    }
+
     public (string Sql, MySqlCommand Command) Build()
     {
         _paramCounter = 0;
@@ -224,6 +284,18 @@ public class InsertQueryBuilder
         }
 
         var sql = $"INSERT INTO `{EscapeIdentifier(_tableName)}` ({string.Join(", ", columnNames)}) VALUES ({string.Join(", ", paramNames)})";
+        var updateFields = ResolveDuplicateUpdateFields();
+        if (updateFields.Count > 0)
+        {
+            var updates = new List<string>(updateFields.Count);
+            foreach (var field in updateFields)
+            {
+                var escapedField = EscapeIdentifier(field);
+                updates.Add($"`{escapedField}` = VALUES(`{escapedField}`)");
+            }
+
+            sql += $" ON DUPLICATE KEY UPDATE {string.Join(", ", updates)}";
+        }
         command.CommandText = sql;
         
         return (sql, command);
@@ -238,6 +310,38 @@ public class InsertQueryBuilder
     public override string ToString()
     {
         return Build().Sql;
+    }
+
+    private List<string> ResolveDuplicateUpdateFields()
+    {
+        if (_updateAllExcept)
+        {
+            var fields = new List<string>(_fields.Count);
+            foreach (var field in _fields.Keys)
+            {
+                if (!_duplicateExcludedFields.Contains(field))
+                    fields.Add(field);
+            }
+
+            if (fields.Count == 0)
+                throw new InvalidOperationException("Nenhum campo restou para atualizar em caso de chave duplicada.");
+
+            return fields;
+        }
+
+        if (_duplicateUpdateFields.Count == 0)
+            return new List<string>();
+
+        var result = new List<string>(_duplicateUpdateFields.Count);
+        foreach (var field in _duplicateUpdateFields)
+        {
+            if (!_fields.ContainsKey(field))
+                throw new InvalidOperationException($"O campo '{field}' não existe no INSERT atual.");
+
+            result.Add(field);
+        }
+
+        return result;
     }
 
     private string GetNextParamName() => $"p{_paramCounter++}";

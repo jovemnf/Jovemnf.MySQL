@@ -7,6 +7,7 @@ using System.Reflection;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using MySqlConnector;
 
@@ -88,6 +89,14 @@ public class SelectQueryBuilder
         return connection.ExecuteQueryAsync(this);
     }
 
+    public Task<MySQLReader> ExecuteAsync(MySQL connection, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(connection);
+        if (_tableName == null)
+            throw new InvalidOperationException("Tabela não especificada");
+        return connection.ExecuteQueryAsync(this, cancellationToken);
+    }
+
     /// <summary>
     /// Executa o SELECT e retorna todas as linhas mapeadas para o tipo T.
     /// </summary>
@@ -100,6 +109,14 @@ public class SelectQueryBuilder
         if (_tableName == null) 
             throw new InvalidOperationException("Tabela não especificada");
         return connection.ExecuteQueryAsync<T>(this);
+    }
+
+    public Task<List<T>> ExecuteAsync<T>(MySQL connection, CancellationToken cancellationToken) where T : new()
+    {
+        ArgumentNullException.ThrowIfNull(connection);
+        if (_tableName == null)
+            throw new InvalidOperationException("Tabela não especificada");
+        return connection.ExecuteQueryAsync<T>(this, cancellationToken);
     }
 
     /// <summary>
@@ -122,6 +139,14 @@ public class SelectQueryBuilder
         if (_tableName == null)
             throw new InvalidOperationException("Tabela não especificada");
         return connection.ExecuteExistsAsync(this);
+    }
+
+    public Task<bool> ExistsAsync(MySQL connection, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(connection);
+        if (_tableName == null)
+            throw new InvalidOperationException("Tabela não especificada");
+        return connection.ExecuteExistsAsync(this, cancellationToken);
     }
 
     public SelectQueryBuilder Select(params string[] fields)
@@ -240,9 +265,51 @@ public class SelectQueryBuilder
         return this;
     }
 
+    public SelectQueryBuilder WhereIn(string field, SelectQueryBuilder subquery)
+    {
+        ArgumentNullException.ThrowIfNull(subquery);
+        _whereConditions.Add(new WhereCondition { Field = ResolveField(field), Operator = "IN", Logic = "AND", Subquery = subquery });
+        return this;
+    }
+
     public SelectQueryBuilder WhereNotIn<T>(string field, IEnumerable<T> values)
     {
         _whereConditions.Add(new WhereCondition { Field = ResolveField(field), Values = MaterializeValues(values), Operator = "NOT IN", Logic = "AND" });
+        return this;
+    }
+
+    public SelectQueryBuilder WhereNotIn(string field, SelectQueryBuilder subquery)
+    {
+        ArgumentNullException.ThrowIfNull(subquery);
+        _whereConditions.Add(new WhereCondition { Field = ResolveField(field), Operator = "NOT IN", Logic = "AND", Subquery = subquery });
+        return this;
+    }
+
+    public SelectQueryBuilder WhereExists(SelectQueryBuilder subquery)
+    {
+        ArgumentNullException.ThrowIfNull(subquery);
+        _whereConditions.Add(new WhereCondition { Operator = "EXISTS", Logic = "AND", Subquery = subquery });
+        return this;
+    }
+
+    public SelectQueryBuilder WhereNotExists(SelectQueryBuilder subquery)
+    {
+        ArgumentNullException.ThrowIfNull(subquery);
+        _whereConditions.Add(new WhereCondition { Operator = "NOT EXISTS", Logic = "AND", Subquery = subquery });
+        return this;
+    }
+
+    public SelectQueryBuilder OrWhereExists(SelectQueryBuilder subquery)
+    {
+        ArgumentNullException.ThrowIfNull(subquery);
+        _whereConditions.Add(new WhereCondition { Operator = "EXISTS", Logic = "OR", Subquery = subquery });
+        return this;
+    }
+
+    public SelectQueryBuilder OrWhereNotExists(SelectQueryBuilder subquery)
+    {
+        ArgumentNullException.ThrowIfNull(subquery);
+        _whereConditions.Add(new WhereCondition { Operator = "NOT EXISTS", Logic = "OR", Subquery = subquery });
         return this;
     }
 
@@ -340,6 +407,23 @@ public class SelectQueryBuilder
         return BuildQuery(BuildSelectionClause(), includeOrderBy: true, limit: _limit, offset: _offset);
     }
 
+    public (string Sql, MySqlCommand Command) BuildCount()
+    {
+        _paramCounter = 0;
+        if (string.IsNullOrEmpty(_tableName))
+            throw new InvalidOperationException("Nome da tabela não definido");
+
+        if (_groupBys.Count == 0 && _havingConditions.Count == 0 && !_distinct)
+            return BuildQuery("COUNT(*)", includeOrderBy: false, limit: null, offset: null);
+
+        var (innerSql, innerCommand) = BuildQuery(BuildSelectionClause(), includeOrderBy: false, limit: null, offset: null);
+        var command = new MySqlCommand();
+        RebindParameters(innerCommand, command, innerSql, out var rewrittenSql);
+        var sql = $"SELECT COUNT(*) FROM ({rewrittenSql}) AS `count_query`";
+        command.CommandText = sql;
+        return (sql, command);
+    }
+
     /// <summary>
     /// Monta uma consulta EXISTS baseada na tabela, JOINs e WHEREs atuais.
     /// </summary>
@@ -379,6 +463,25 @@ public class SelectQueryBuilder
         return ReplaceParameters(sql, command.Parameters);
     }
 
+    public SelectQueryBuilder Clone()
+    {
+        var clone = (SelectQueryBuilder)MemberwiseClone();
+        clone._fields = _fields.Select(field => new SelectionField { Name = field.Name, IsRaw = field.IsRaw }).ToList();
+        clone._joins = _joins.Select(join => new JoinClause
+        {
+            Table = join.Table,
+            First = join.First,
+            Operator = join.Operator,
+            Second = join.Second,
+            Type = join.Type
+        }).ToList();
+        clone._whereConditions = _whereConditions.Select(CloneWhereCondition).ToList();
+        clone._havingConditions = _havingConditions.Select(CloneWhereCondition).ToList();
+        clone._groupBys = new List<string>(_groupBys);
+        clone._orderBys = new List<string>(_orderBys);
+        return clone;
+    }
+
     private string BuildWhereClause(WhereCondition condition, MySqlCommand command)
     {
         if (condition.Operator == "RAW")
@@ -410,12 +513,19 @@ public class SelectQueryBuilder
 
         switch (condition.Operator)
         {
+            case "EXISTS":
+            case "NOT EXISTS":
+                return BuildExistsClause(condition, command);
+
             case "IS NULL":
             case "IS NOT NULL":
                 return $"{escapedField} {condition.Operator}";
 
             case "IN":
             case "NOT IN":
+                if (condition.Subquery != null)
+                    return BuildInSubqueryClause(condition, command, escapedField);
+
                 var inParams = new List<string>(condition.Values.Count);
                 foreach (var val in condition.Values)
                 {
@@ -440,6 +550,50 @@ public class SelectQueryBuilder
     }
 
     private string GetNextParamName() => $"p{_paramCounter++}";
+
+    private string BuildInSubqueryClause(WhereCondition condition, MySqlCommand command, string escapedField)
+    {
+        var (_, subqueryCommand) = condition.Subquery.Build();
+        RebindParameters(subqueryCommand, command, subqueryCommand.CommandText, out var rewrittenSql);
+        return $"{escapedField} {condition.Operator} ({rewrittenSql})";
+    }
+
+    private string BuildExistsClause(WhereCondition condition, MySqlCommand command)
+    {
+        var subquery = condition.Subquery ?? throw new InvalidOperationException("A subquery do EXISTS não foi informada.");
+        var (_, subqueryCommand) = subquery.Build();
+        RebindParameters(subqueryCommand, command, subqueryCommand.CommandText, out var rewrittenSql);
+        return $"{condition.Operator} ({rewrittenSql})";
+    }
+
+    private void RebindParameters(MySqlCommand sourceCommand, MySqlCommand targetCommand, string sourceSql, out string rewrittenSql)
+    {
+        rewrittenSql = sourceSql;
+
+        foreach (MySqlParameter parameter in sourceCommand.Parameters)
+        {
+            var nextName = GetNextParamName();
+            var newParameterName = $"@{nextName}";
+            rewrittenSql = Regex.Replace(rewrittenSql, $@"{Regex.Escape(parameter.ParameterName)}(?!\w)", newParameterName);
+            AddParameter(targetCommand, nextName, parameter.Value);
+        }
+    }
+
+    private static WhereCondition CloneWhereCondition(WhereCondition condition)
+    {
+        return new WhereCondition
+        {
+            Field = condition.Field,
+            Value = condition.Value,
+            SecondValue = condition.SecondValue,
+            Values = condition.Values == null ? null : new List<object>(condition.Values),
+            Operator = condition.Operator,
+            Logic = condition.Logic,
+            RawSql = condition.RawSql,
+            RawParameters = condition.RawParameters == null ? null : (object[])condition.RawParameters.Clone(),
+            Subquery = condition.Subquery?.Clone()
+        };
+    }
 
     private static string ReplaceParameters(string sql, MySqlParameterCollection parameters)
     {
@@ -745,6 +899,7 @@ public class SelectQueryBuilder
         public string Logic { get; set; }
         public string RawSql { get; set; }
         public object[] RawParameters { get; set; }
+        public SelectQueryBuilder Subquery { get; set; }
     }
 
     protected virtual string ResolveField(string field) => field;

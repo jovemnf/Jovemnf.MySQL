@@ -4,6 +4,7 @@ using System.Data;
 using System.Diagnostics;
 using System.Reflection;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Jovemnf.MySQL.Geometry;
 using MySqlConnector;
@@ -22,6 +23,8 @@ public class UpdateQueryBuilder
 // ... (skip unchanged lines) ...
     private int _paramCounter = 0;
     private bool _allowAll = false;
+    private bool _confirmedMassOperation = false;
+    private int? _limit;
         
     private static readonly HashSet<string> AllowedOperators = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -43,6 +46,12 @@ public class UpdateQueryBuilder
         return this;
     }
 
+    public UpdateQueryBuilder ConfirmMassOperation()
+    {
+        _confirmedMassOperation = true;
+        return this;
+    }
+
     public Task<int> ExecuteAsync(MySQL connection)
     {
         ArgumentNullException.ThrowIfNull(connection);
@@ -52,6 +61,17 @@ public class UpdateQueryBuilder
             throw new InvalidOperationException("Nenhum campo para atualizar");
 
         return connection.ExecuteUpdateAsync(this);
+    }
+
+    public Task<int> ExecuteAsync(MySQL connection, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(connection);
+        if (_tableName == null)
+            throw new InvalidOperationException("Tabela não especificada");
+        if (_fields.Count == 0)
+            throw new InvalidOperationException("Nenhum campo para atualizar");
+
+        return connection.ExecuteUpdateAsync(this, cancellationToken);
     }
 
     /// <summary>
@@ -70,6 +90,17 @@ public class UpdateQueryBuilder
             throw new InvalidOperationException("Nenhum campo para atualizar");
 
         return connection.ExecuteUpdateAsync<T>(this);
+    }
+
+    public Task<T> ExecuteAsync<T>(MySQL connection, CancellationToken cancellationToken) where T : new()
+    {
+        ArgumentNullException.ThrowIfNull(connection);
+        if (_tableName == null)
+            throw new InvalidOperationException("Tabela não especificada");
+        if (_fields.Count == 0)
+            throw new InvalidOperationException("Nenhum campo para atualizar");
+
+        return connection.ExecuteUpdateAsync<T>(this, cancellationToken);
     }
 
     private string EscapeIdentifier(string identifier)
@@ -299,6 +330,15 @@ public class UpdateQueryBuilder
         return this;
     }
 
+    public UpdateQueryBuilder Limit(int limit)
+    {
+        if (limit <= 0)
+            throw new ArgumentOutOfRangeException(nameof(limit), "O limite deve ser maior que zero.");
+
+        _limit = limit;
+        return this;
+    }
+
     public (string Sql, MySqlCommand Command) Build()
     {
         _paramCounter = 0;
@@ -310,6 +350,13 @@ public class UpdateQueryBuilder
             
         if (_whereConditions.Count == 0 && !_allowAll)
             throw new InvalidOperationException("Nenhuma condição WHERE definida. Use .All() se realmente deseja atualizar todas as linhas.");
+
+        var protection = MySQL.DefaultOptions.MutationProtection;
+        if (_allowAll && protection.RequireConfirmationForAllOperations && !_confirmedMassOperation)
+            throw new InvalidOperationException("Operação em massa requer confirmação explícita. Use .ConfirmMassOperation().");
+
+        if (_allowAll && protection.RequireLimitForUpdateAllOperations && !_limit.HasValue)
+            throw new InvalidOperationException("Operações UPDATE em massa exigem LIMIT configurado pelas opções globais.");
 
         var command = new MySqlCommand();
             
@@ -357,6 +404,11 @@ public class UpdateQueryBuilder
         if (whereClauses.Count > 0)
         {
             sql += $" WHERE {string.Join(" ", whereClauses)}";
+        }
+
+        if (_limit.HasValue)
+        {
+            sql += $" LIMIT {_limit.Value}";
         }
         command.CommandText = sql;
             

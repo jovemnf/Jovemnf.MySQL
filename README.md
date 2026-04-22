@@ -109,6 +109,30 @@ using (var mysql = new MySQL(config))
 }
 ```
 
+#### Upsert em Insert Unitário
+
+Quando você precisa fazer insert com atualização em caso de chave duplicada, o `InsertQueryBuilder` também suporta `ON DUPLICATE KEY UPDATE`:
+
+```csharp
+var builder = new InsertQueryBuilder()
+    .Table("veiculos")
+    .Value("tracker_id", 10)
+    .Value("placa", "ABC1234")
+    .Value("status", "online")
+    .OnDuplicateKeyUpdate("placa", "status");
+```
+
+Ou, se preferir atualizar todos os campos exceto alguns:
+
+```csharp
+var builder = new InsertQueryBuilder()
+    .Table("veiculos")
+    .Value("tracker_id", 10)
+    .Value("placa", "ABC1234")
+    .Value("status", "online")
+    .OnDuplicateKeyUpdateAllExcept("tracker_id");
+```
+
 ### Fluent Insert Batch Query Builder
 
 O `InsertBatchQueryBuilder` permite inserir múltiplas linhas em uma única operação e também suportar `upsert` com `ON DUPLICATE KEY UPDATE`.
@@ -215,6 +239,18 @@ var builder = new InsertBatchQueryBuilder()
 - Diferente do `InsertQueryBuilder`, o batch não usa `LAST_INSERT_ID()` nem `ExecuteAsync<T>()`, pois isso não é confiável para múltiplas linhas.
 - Os mesmos mapeamentos de `DbTable`, `DbField`, `snake_case`, JSON e tipos geométricos continuam disponíveis no fluxo batch.
 
+#### Bulk insert e bulk upsert com chunking
+
+Para processar grandes volumes, a classe `MySQL` agora expõe helpers de bulk com chunking automático:
+
+```csharp
+using var mysql = new MySQL(config);
+await mysql.OpenAsync();
+
+int inserted = await mysql.BulkInsertAsync(veiculos, chunkSize: 500);
+int upserted = await mysql.BulkUpsertAsync(veiculos, new[] { "Status", "Placa" }, chunkSize: 500);
+```
+
 ### Fluent Select Query Builder
 
 O `SelectQueryBuilder` permite criar consultas de seleção complexas com joins, filtros e ordenação.
@@ -268,6 +304,48 @@ ORDER BY `status` ASC
 ```
 
 O `SelectQueryBuilder` também aceita `QueryOperator` em `Where(...)`, `OrWhere(...)`, `Having(...)` e `OrHaving(...)`, mantendo a mesma API tipada dos builders de `Update` e `Delete`.
+
+#### Subqueries e `Exists`
+
+O builder também suporta subqueries tipadas para evitar cair em `WhereRaw(...)` em cenários comuns:
+
+```csharp
+var eventosAtivos = new SelectQueryBuilder()
+    .SelectRaw("1")
+    .From("rastreamento_eventos re")
+    .WhereRaw("re.veiculo_id = v.id")
+    .Where("ativo", true);
+
+var builder = new SelectQueryBuilder()
+    .Select("v.id", "v.placa")
+    .From("veiculos v")
+    .WhereExists(eventosAtivos);
+```
+
+Também há overloads como:
+
+```csharp
+.WhereIn("v.id", subquery)
+.WhereNotIn("v.id", subquery)
+.WhereNotExists(subquery)
+.OrWhereExists(subquery)
+```
+
+#### Paginação estruturada
+
+Além de `Limit(...)`, você pode usar paginação estruturada com metadados:
+
+```csharp
+using var mysql = new MySQL(config);
+await mysql.OpenAsync();
+
+var page = await mysql.PaginateAsync<Veiculo>(
+    SelectQueryBuilder.For<Veiculo>().Where("ativo", true),
+    new PageRequest(page: 2, pageSize: 50));
+
+Console.WriteLine(page.TotalItems);
+Console.WriteLine(page.HasNextPage);
+```
 
 #### Projeção com `record` no `.Select(...)`
 
@@ -381,6 +459,21 @@ new DeleteQueryBuilder().Table("users").Build();
 new DeleteQueryBuilder().Table("users").All().Build();
 ```
 
+Se quiser endurecer ainda mais esse comportamento globalmente, use `MySQL.DefaultOptions.MutationProtection`:
+
+```csharp
+MySQL.DefaultOptions.MutationProtection.RequireConfirmationForAllOperations = true;
+MySQL.DefaultOptions.MutationProtection.RequireLimitForDeleteAllOperations = true;
+
+var builder = new DeleteQueryBuilder()
+    .Table("logs")
+    .All()
+    .ConfirmMassOperation()
+    .Limit(100);
+```
+
+O `UpdateQueryBuilder` também suporta `ConfirmMassOperation()` e `Limit(...)` para atualizações em massa controladas.
+
 ### QueryOperator Enum (Tipagem Forte)
 
 Todos os builders (`Update`, `Select`, `Delete`) suportam o enum `QueryOperator` para evitar strings mágicas:
@@ -433,6 +526,48 @@ using (var mysql = new MySQL(config))
 
 // Ou mapear uma lista completa:
 List<Usuario> users = await reader.ToModelListAsync<Usuario>();
+```
+
+#### Conversores customizados
+
+Você pode registrar conversores globais ou usar atributo por propriedade:
+
+```csharp
+public sealed class TrackerStatusConverter : IMySQLValueConverter
+{
+    public object ConvertFromDb(object value, Type targetType)
+    {
+        return string.Equals(value?.ToString(), "online", StringComparison.OrdinalIgnoreCase)
+            ? TrackerStatus.Online
+            : TrackerStatus.Offline;
+    }
+}
+
+MySQLValueConverterRegistry.Register<TrackerStatus>(new TrackerStatusConverter());
+```
+
+Ou por atributo:
+
+```csharp
+public sealed class VeiculoView
+{
+    [DbConverter(typeof(UpperCaseStringConverter))]
+    public string Placa { get; set; }
+}
+```
+
+#### Multi-mapping
+
+Para leituras de `JOIN` com dois modelos no mesmo resultado:
+
+```csharp
+using var mysql = new MySQL(config);
+await mysql.OpenAsync();
+
+var lista = await mysql.ExecuteQueryAsync<Usuario, Rastreador, UsuarioRastreadorView>(
+    builder,
+    (usuario, rastreador) => new UsuarioRastreadorView(usuario.Nome, rastreador.Codigo),
+    splitOn: "tracker_id");
 ```
 
 ### ExecuteAsync&lt;T&gt; — Retorno tipado nos builders
@@ -577,6 +712,39 @@ else
     Console.WriteLine($"Erro: {result.Error}");
 }
 ```
+
+### CancellationToken, transação por escopo e observabilidade
+
+As principais APIs assíncronas agora possuem overload com `CancellationToken`, permitindo cancelamento cooperativo em jobs, APIs HTTP e rotinas de monitoramento:
+
+```csharp
+using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+var reader = await mysql.ExecuteQueryAsync(builder, cts.Token);
+```
+
+Para transações por escopo:
+
+```csharp
+await mysql.WithTransactionAsync(async db =>
+{
+    await db.ExecuteUpdateAsync(updateBuilder, cancellationToken);
+    await db.ExecuteInsertAsync(insertBuilder, lastId: false, cancellationToken);
+}, cancellationToken);
+```
+
+E para observabilidade com `ILogger`:
+
+```csharp
+var options = new MySQLOptions
+{
+    Logger = logger,
+    SqlMasker = sql => sql.Replace("senha", "***")
+};
+
+using var mysql = new MySQL(config, options);
+```
+
+Quando configurado, o logger recebe operação, tempo de execução, presença de transação, linhas afetadas e SQL para debug já mascarada.
 
 ### Testes
 
