@@ -8,6 +8,7 @@ using System.Data.Common;
 using System.Threading.Tasks;
 using System.Reflection;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
@@ -1291,6 +1292,28 @@ public class MySQLReader(DbDataReader dr) : IDisposable, IAsyncDisposable
         }
 
         return list;
+    }
+
+    /// <summary>
+    /// Retorna as linhas do resultado como uma sequência assíncrona (<see cref="IAsyncEnumerable{T}"/>),
+    /// mapeando cada linha para o tipo <typeparamref name="T"/> sob demanda.
+    /// </summary>
+    /// <remarks>
+    /// Diferente de <see cref="ToModelListAsync{T}(CancellationToken)"/>, este método não carrega todas
+    /// as linhas em memória — cada instância é yieldada assim que é lida do cursor do banco. Ideal para
+    /// grandes resultados (milhares/milhões de linhas) em que se quer evitar picos de memória. A iteração
+    /// deve ser concluída (ou abandonada com <c>break</c>) para que o reader seja liberado; sempre prefira
+    /// <c>await foreach</c>, que garante o <see cref="IAsyncDisposable"/> do enumerador.
+    /// </remarks>
+    /// <typeparam name="T">Tipo do modelo (deve ter construtor sem parâmetros e propriedades mapeáveis).</typeparam>
+    /// <param name="cancellationToken">Token de cancelamento cooperativo.</param>
+    public async IAsyncEnumerable<T> ToModelStreamAsync<T>(
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        while (await ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            yield return ToModel<T>();
+        }
     }
 
     public List<TResult> ToMultiMapList<TFirst, TSecond, TResult>(Func<TFirst, TSecond, TResult> map, string splitOn = "id")

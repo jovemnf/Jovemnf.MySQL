@@ -8,6 +8,8 @@ Pacote .NET Core de alto desempenho para interação simplificada com bancos de 
 - [Configuração de conexão](#configuracao)
 - [Builders fluentes](#builders-fluentes)
 - [Mapeamento e ORM](#mapeamento-e-orm)
+- [Entidades tipadas (Active Record)](#entidades-tipadas)
+- [Streaming de resultados](#streaming)
 - [Operações avançadas](#operacoes-avancadas)
 - [Paginação](#paginacao)
 - [DatabaseHelper](#databasehelper)
@@ -28,6 +30,9 @@ Pacote .NET Core de alto desempenho para interação simplificada com bancos de 
 - **Suporte a Transações:** Execução atômica de múltiplas operações.
 - **Async/Await:** Suporte completo para operações assíncronas.
 - **Mapeamento Avançado:** Atributos `DbTable` e `DbField` para controle total sobre nomes de tabelas e colunas, com suporte a `snake_case`.
+- **Entidades tipadas (Active Record):** classe base `Entity<TSelf>` que expõe atalhos estáticos estilo LINQ diretamente na entidade (`Veiculo.Where(v => v.IdVeiculo == 1)`, `Veiculo.FindAsync(...)`, `Veiculo.Update()`, etc.).
+- **Chaves Primárias:** atributo `[DbPrimaryKey]` com suporte a **PKs compostas** (via `Order`) e busca pronta via `Entity<TSelf>.FindByPkAsync(...)`.
+- **Streaming (`IAsyncEnumerable<T>`):** leitura linha-a-linha para resultados grandes sem pico de memória (`await foreach` em `StreamAsync<T>`/`ToModelStreamAsync<T>`).
 - **Observabilidade e Cancelamento:** Overloads com `CancellationToken`, logging via `ILogger` e mascaramento de SQL com `MySQLOptions`.
 - **Bulk Operations:** `BulkInsertAsync`, `BulkUpsertAsync` e chunking configurável para grandes volumes.
 - **Paginação Estruturada:** `PageRequest` e `PagedResult<T>` com metadados de navegação.
@@ -968,6 +973,701 @@ var update = new UpdateQueryBuilder<Usuario>()
     .Where("Id", user.Id)
     .ToString();
 ```
+
+<a id="entidades-tipadas"></a>
+## Entidades tipadas (Active Record)
+
+A classe abstrata `Entity<TSelf>` usa o padrão **CRTP** (Curiously Recurring Template Pattern) para expor atalhos estáticos tipados diretamente no próprio modelo, no estilo LINQ/Active Record. A ideia é que você escreva menos código de plumbing e consiga fazer consultas como:
+
+```csharp
+var builder = Veiculo.Where(v => v.IdVeiculo == 1);
+var ativos  = await Veiculo.Where(v => v.Ativo).ExecuteAsync<Veiculo>(mysql);
+```
+
+Por baixo dos panos, `Entity<TSelf>` apenas orquestra os builders já existentes (`SelectQueryBuilder<T>`, `UpdateQueryBuilder<T>`, `DeleteQueryBuilder<T>`, `InsertQueryBuilder<T>`, `InsertBatchQueryBuilder<T>`), respeitando o mapeamento definido pelos atributos `DbTable`, `DbField` e `IgnoreToDictionary`.
+
+### Definindo a entidade
+
+Basta herdar de `Entity<TSelf>` referenciando a si mesma (CRTP) e aplicar os atributos de mapeamento normalmente:
+
+```csharp
+using Jovemnf.MySQL;
+
+[DbTable("veiculos")]
+public sealed class Veiculo : Entity<Veiculo>
+{
+    [DbField("id_veiculo")]
+    public int IdVeiculo { get; set; }
+
+    [DbField("id_cliente")]
+    public int IdCliente { get; set; }
+
+    public string Placa { get; set; } = null!;
+
+    public bool Ativo { get; set; }
+
+    public string Status { get; set; } = null!;
+
+    [DbField("data_cadastro")]
+    public DateTime DataCadastro { get; set; }
+
+    [IgnoreToDictionary]
+    public string StatusCalculadoEmMemoria { get; set; } = "";
+}
+```
+
+> ⚠️ A restrição `where TSelf : Entity<TSelf>, new()` exige que a entidade tenha construtor sem parâmetros — padrão de praticamente todos os POCOs mapeados pela lib.
+
+### Construindo consultas com `Where` tipado
+
+O `Where(Expression<Func<TSelf, bool>>)` aproveita o tradutor de expressões da lib, incluindo suporte a `&&`, `||`, `!`, `==`, `!=`, `<`, `<=`, `>`, `>=`, comparação com `null`, `string.Contains/StartsWith/EndsWith`, `collection.Contains(v.Campo)` e `collection.Any(x => x == v.Campo)`.
+
+```csharp
+// Simples
+var porId = Veiculo.Where(v => v.IdVeiculo == 1);
+
+// Composto (AND/OR)
+var filtrados = Veiculo.Where(v =>
+    v.IdCliente == 10
+    && v.Ativo
+    && v.Status != "bloqueado");
+
+// IN/NOT IN a partir de coleção
+var ids = new[] { 10, 12, 15 };
+var porLista = Veiculo.Where(v => ids.Contains(v.IdVeiculo));
+
+// LIKE automático
+var porPlaca = Veiculo.Where(v => v.Placa.StartsWith("ABC"));
+
+// NULL/NOT NULL
+var semStatus = Veiculo.Where(v => v.Status == null);
+```
+
+O SQL gerado é totalmente parametrizado (nada de concatenação) e os nomes das colunas são resolvidos via `DbField` (ex.: `v.IdVeiculo` → `` `id_veiculo` ``).
+
+### Encadeando como LINQ
+
+O retorno de `Where`/`Query`/`Select`/`OrderBy`/`Limit` é um `SelectQueryBuilder<TSelf>`, então você pode continuar encadeando com toda a API do builder:
+
+```csharp
+var pagina = Veiculo
+    .Where(v => v.IdCliente == 10 && v.Ativo)
+    .OrderBy(nameof(Veiculo.DataCadastro), "DESC")
+    .Limit(20, offset: 0);
+
+var (sql, command) = pagina.Build();
+// SELECT * FROM `veiculos`
+// WHERE `id_cliente` = @p0 AND `ativo` = @p1
+// ORDER BY `data_cadastro` DESC LIMIT 20
+```
+
+### Executando a consulta
+
+Os builders aceitam tanto uma instância aberta de `MySQL` quanto um `DatabaseHelper` (que gerencia a conexão internamente):
+
+```csharp
+// Usando MySQL já aberto
+await using var mysql = new MySQL(config);
+await mysql.OpenAsync();
+
+List<Veiculo> ativos = await Veiculo
+    .Where(v => v.Ativo)
+    .OrderBy("placa")
+    .ExecuteAsync<Veiculo>(mysql);
+
+// Usando DatabaseHelper (abre/fecha automaticamente)
+var helper = new DatabaseHelper(connectionString);
+
+List<Veiculo> porCliente = await helper.ExecuteQueryAsync<Veiculo>(
+    Veiculo.Where(v => v.IdCliente == 42));
+```
+
+### Atalhos de execução direta
+
+Para consultas simples você pode pular o builder intermediário:
+
+```csharp
+// Todos os registros
+var todos = await Veiculo.AllAsync(mysql);
+
+// Filtro direto
+var bloqueados = await Veiculo.FindAsync(v => v.Status == "bloqueado", mysql);
+
+// Existência
+bool existe = await Veiculo.ExistsAsync(v => v.IdVeiculo == 1, mysql);
+
+// Contagem
+long total   = await Veiculo.CountAsync(mysql);
+long ativos  = await Veiculo.CountAsync(v => v.Ativo, mysql);
+
+// Também funciona com DatabaseHelper:
+var usando = await Veiculo.AllAsync(helper);
+var achados = await Veiculo.FindAsync(v => v.IdCliente == 10, helper);
+```
+
+### Mutações (Update / Delete / Insert / InsertBatch)
+
+O `Entity<TSelf>` também expõe atalhos para os demais builders, mantendo tipagem forte:
+
+```csharp
+// UPDATE: Veiculo.Update() -> UpdateQueryBuilder<Veiculo>
+var updates = await Veiculo.Update()
+    .Set(nameof(Veiculo.Status), "ativo")
+    .Set(nameof(Veiculo.Ativo), true)
+    .Where(v => v.IdCliente == 10 && v.Status == "pendente")
+    .ExecuteAsync(mysql);
+
+// DELETE: Veiculo.Delete() -> DeleteQueryBuilder<Veiculo>
+await Veiculo.Delete()
+    .Where(v => !v.Ativo && v.DataCadastro < DateTime.Now.AddYears(-5))
+    .ExecuteAsync(mysql);
+
+// INSERT: Veiculo.Insert() -> InsertQueryBuilder<Veiculo>
+// Retorna a entidade já hidratada com o id gerado pelo banco.
+var novo = await Veiculo.Insert()
+    .ValuesFrom(new Veiculo
+    {
+        IdCliente   = 42,
+        Placa       = "ABC1D23",
+        Ativo       = true,
+        Status      = "ativo",
+        DataCadastro = DateTime.UtcNow
+    })
+    .ExecuteAsync<Veiculo>(mysql);
+
+Console.WriteLine($"Novo veículo id={novo.IdVeiculo}");
+
+// INSERT em lote: Veiculo.InsertBatch() -> InsertBatchQueryBuilder<Veiculo>
+var inseridos = await Veiculo.InsertBatch()
+    .RowsFrom(listaDeVeiculos)
+    .ExecuteAsync(mysql);
+```
+
+### Seleção de colunas específicas
+
+`Select(params string[])` restringe os campos retornados (útil para performance):
+
+```csharp
+var resumo = await Veiculo
+    .Select(nameof(Veiculo.IdVeiculo), nameof(Veiculo.Placa), nameof(Veiculo.Ativo))
+    .Where(v => v.IdCliente == 10)
+    .ExecuteAsync<Veiculo>(mysql);
+
+// SELECT `id_veiculo`, `placa`, `ativo` FROM `veiculos` WHERE `id_cliente` = @p0
+```
+
+### Integração com paginação
+
+Como `Entity<TSelf>.Where(...)` devolve um `SelectQueryBuilder<TSelf>`, toda a API de paginação continua funcionando:
+
+```csharp
+var pagina = await Veiculo
+    .Where(v => v.Ativo)
+    .OrderBy(nameof(Veiculo.DataCadastro), "DESC")
+    .PaginateAsync<Veiculo>(mysql, new PageRequest { Page = 1, PageSize = 20 });
+
+Console.WriteLine($"Total: {pagina.TotalCount}, Páginas: {pagina.TotalPages}");
+foreach (var v in pagina.Items)
+{
+    Console.WriteLine(v.Placa);
+}
+```
+
+### Chave primária com `[DbPrimaryKey]` e `FindByPkAsync`
+
+Marque as colunas que compõem a chave primária com o atributo `[DbPrimaryKey]` e ganhe de graça os atalhos `FindByPkAsync` e `ExistsByPkAsync`. O atributo suporta **chaves primárias compostas** via a propriedade `Order`, que define a posição de cada coluna.
+
+#### Chave primária simples
+
+```csharp
+[DbTable("veiculos")]
+public sealed class Veiculo : Entity<Veiculo>
+{
+    [DbPrimaryKey]
+    [DbField("id_veiculo")]
+    public int IdVeiculo { get; set; }
+
+    public string Placa { get; set; } = null!;
+}
+
+// Uso:
+Veiculo? v = await Veiculo.FindByPkAsync(mysql, 42);
+bool existe = await Veiculo.ExistsByPkAsync(mysql, 42);
+
+// Também funciona com DatabaseHelper:
+Veiculo? v2 = await Veiculo.FindByPkAsync(helper, 42);
+```
+
+SQL gerado:
+
+```sql
+SELECT * FROM `veiculos` WHERE `id_veiculo` = @p0 LIMIT 1
+```
+
+#### Chave primária composta
+
+Use `Order` para definir a ordem em que os valores serão passados no `FindByPkAsync`:
+
+```csharp
+[DbTable("usuarios_permissoes")]
+public sealed class UsuarioPermissao : Entity<UsuarioPermissao>
+{
+    [DbPrimaryKey(Order = 0)]
+    [DbField("id_usuario")]
+    public int IdUsuario { get; set; }
+
+    [DbPrimaryKey(Order = 1)]
+    [DbField("id_permissao")]
+    public int IdPermissao { get; set; }
+
+    public bool Ativo { get; set; }
+}
+
+// Valores posicionais (na ordem do Order):
+var rel = await UsuarioPermissao.FindByPkAsync(mysql, idUsuario: 10, idPermissao: 5);
+// SELECT * FROM `usuarios_permissoes`
+// WHERE `id_usuario` = @p0 AND `id_permissao` = @p1 LIMIT 1
+
+// Ou por dicionário (aceita nome da coluna ou da propriedade, case-insensitive):
+var rel2 = await UsuarioPermissao.FindByPkAsync(mysql, new Dictionary<string, object>
+{
+    ["id_usuario"]  = 10,
+    ["id_permissao"] = 5,
+});
+
+// Verificação de existência:
+bool temRel = await UsuarioPermissao.ExistsByPkAsync(mysql, 10, 5);
+```
+
+#### Diagnóstico e introspecção
+
+A classe expõe propriedades estáticas úteis para debug e uso genérico:
+
+```csharp
+IReadOnlyList<string> cols = UsuarioPermissao.PrimaryKeyColumns;
+// ["id_usuario", "id_permissao"]
+
+bool composta = UsuarioPermissao.HasCompositePrimaryKey;  // true
+```
+
+#### Validações e mensagens de erro
+
+O `FindByPkAsync` aplica validações claras antes de tocar no banco:
+
+| Situação | Exceção | Mensagem |
+| -------- | ------- | -------- |
+| Entidade sem `[DbPrimaryKey]` | `InvalidOperationException` | Orienta a marcar a propriedade com `[DbPrimaryKey]`. |
+| Quantidade de valores diferente do nº de colunas de PK | `ArgumentException` | Lista as colunas de PK esperadas e quantas foram informadas. |
+| Dicionário com chave desconhecida / coluna não coberta | `ArgumentException` | Indica qual coluna/propriedade ficou sem valor. |
+
+> 💡 Dica: se você criar uma entidade sem PK e tentar `FindByPkAsync`, a exceção acontece imediatamente (sem abrir conexão com o banco), então é fácil identificar em testes.
+
+### API estática disponível em `Entity<TSelf>`
+
+| Método | Retorno | Descrição |
+| ------ | ------- | --------- |
+| `Query()` | `SelectQueryBuilder<TSelf>` | Builder cru, já apontando para a tabela correta. |
+| `Where(Expression<Func<TSelf,bool>>)` | `SelectQueryBuilder<TSelf>` | `WHERE` tipado estilo LINQ. |
+| `Where(string field, object value, string op = "=")` | `SelectQueryBuilder<TSelf>` | `WHERE` campo/valor clássico. |
+| `Select(params string[])` | `SelectQueryBuilder<TSelf>` | Restringe colunas retornadas. |
+| `OrderBy(string field, string direction = "ASC")` | `SelectQueryBuilder<TSelf>` | Ordenação. |
+| `Limit(int limit, int offset = 0)` | `SelectQueryBuilder<TSelf>` | `LIMIT`/`OFFSET`. |
+| `Update()` / `Delete()` / `Insert()` / `InsertBatch()` | Builders tipados | Atalhos para mutação. |
+| `AllAsync(mysql \| helper)` | `Task<List<TSelf>>` | Retorna todas as linhas. |
+| `StreamAllAsync(mysql \| helper[, ct])` | `IAsyncEnumerable<TSelf>` | Itera todas as linhas sem carregar tudo em memória. |
+| `StreamAsync(predicate, mysql \| helper[, ct])` | `IAsyncEnumerable<TSelf>` | Itera linhas que satisfazem o predicado em modo streaming. |
+| `FindAsync(predicate, mysql \| helper)` | `Task<List<TSelf>>` | Busca tipada. |
+| `FindByPkAsync(mysql \| helper, params object[])` | `Task<TSelf>` | Busca por chave primária (simples ou composta). Retorna `null` se não encontrado. |
+| `FindByPkAsync(mysql \| helper, IReadOnlyDictionary<string,object>)` | `Task<TSelf>` | Busca por PK informando valores por nome de coluna/propriedade. |
+| `ExistsByPkAsync(mysql, params object[])` | `Task<bool>` | Verifica existência por chave primária. |
+| `ExistsAsync(predicate, mysql[, ct])` | `Task<bool>` | `EXISTS (SELECT 1 ... LIMIT 1)`. |
+| `CountAsync([predicate,] mysql)` | `Task<long>` | `COUNT(*)` com ou sem filtro. |
+| `PrimaryKeyColumns` | `IReadOnlyList<string>` | Colunas de PK ordenadas pelo `Order`. |
+| `HasCompositePrimaryKey` | `bool` | `true` quando a PK envolve 2+ colunas. |
+
+### Por que usar `Entity<TSelf>`
+
+- **Ergonomia:** `Veiculo.Where(v => v.Id == 1)` é mais legível que `SelectQueryBuilder.For<Veiculo>().Where(v => v.Id == 1)` e não acopla o código de domínio ao nome do builder.
+- **Reaproveitamento total:** nada é reescrito — os atalhos apenas delegam para os builders existentes, preservando segurança, parametrização, validações e testes já existentes.
+- **Tipagem forte:** o compilador garante que `v.IdVeiculo` existe, evitando strings mágicas em filtros recorrentes.
+- **Migração suave:** você pode adotar gradualmente. Modelos que não herdam de `Entity<TSelf>` continuam funcionando via `SelectQueryBuilder.For<T>()` normalmente.
+
+<a id="streaming"></a>
+## Streaming de resultados (`IAsyncEnumerable<T>`)
+
+Para resultados grandes — tabelas com milhares ou milhões de linhas — materializar tudo em uma `List<T>` pode consumir memória demais. O pacote expõe uma API de **streaming** baseada em `IAsyncEnumerable<T>` que:
+
+- Lê linha por linha direto do cursor do MySQL (o driver `MySqlConnector` já é streaming por natureza).
+- Mapeia cada linha para o modelo sob demanda dentro do `await foreach`.
+- **Nunca mantém a lista completa em memória**.
+- Fecha automaticamente o reader (e a conexão, quando aberta pela lib) ao final do loop, com `break` ou em caso de exceção.
+
+### Onde está disponível
+
+| Nível | Método | Observação |
+| ----- | ------ | ---------- |
+| `MySQLReader` | `ToModelStreamAsync<T>(ct)` | Mais baixo nível: assume que você já tem um reader aberto. |
+| `MySQL` | `ExecuteQueryStreamAsync<T>(builder, ct)` | Cuida do reader; conexão já deve estar aberta. |
+| `DatabaseHelper` | `ExecuteQueryStreamAsync<T>(builder, ct)` | Abre/fecha conexão automaticamente durante a enumeração. |
+| `SelectQueryBuilder` | `StreamAsync<T>(mysql\|helper, ct)` | Encadeamento fluente. |
+| `Entity<TSelf>` | `StreamAllAsync(...)` / `StreamAsync(predicate, ...)` | Active-record. |
+
+### Exemplo básico com `Entity<TSelf>`
+
+```csharp
+await using var mysql = new MySQL(config);
+await mysql.OpenAsync();
+
+// Itera sem carregar tudo em memória.
+await foreach (var v in Veiculo.StreamAsync(v => v.Ativo, mysql))
+{
+    ProcessarVeiculo(v);
+    // Cada iteração consome ~1 linha — útil para exportações grandes, ETL, etc.
+}
+```
+
+### Com `SelectQueryBuilder` (acesso completo ao builder)
+
+```csharp
+var builder = Veiculo.Query()
+    .OrderBy(nameof(Veiculo.IdVeiculo))
+    .Where(v => v.IdCliente == 42);
+
+await foreach (var v in builder.StreamAsync<Veiculo>(mysql, cancellationToken))
+{
+    Console.WriteLine(v.Placa);
+}
+```
+
+### Com `DatabaseHelper` (conexão gerenciada)
+
+```csharp
+var helper = new DatabaseHelper(connectionString);
+
+await foreach (var v in Veiculo.StreamAllAsync(helper, cancellationToken))
+{
+    // A conexão é aberta no início e fechada ao terminar o foreach.
+    // Evite I/O demorado dentro do loop para não segurar conexão do pool.
+}
+```
+
+### Com reader pré-existente
+
+```csharp
+await using var reader = await mysql.ExecuteQueryAsync(builder, cancellationToken);
+
+await foreach (var v in reader.ToModelStreamAsync<Veiculo>(cancellationToken))
+{
+    // Use quando você precisa controlar o reader manualmente (ex.: múltiplos result sets).
+}
+```
+
+### Processamento em lote (chunking) enquanto consome o stream
+
+Quando você precisa acumular em "pacotes" (por exemplo, para gravar em outro sistema em lotes de 1.000), combine o streaming com um buffer simples:
+
+```csharp
+const int tamanhoDoLote = 1_000;
+var lote = new List<Veiculo>(tamanhoDoLote);
+
+await foreach (var v in Veiculo.StreamAsync(v => v.Ativo, mysql, ct))
+{
+    lote.Add(v);
+    if (lote.Count == tamanhoDoLote)
+    {
+        await EnviarParaOutroSistemaAsync(lote, ct);
+        lote.Clear();
+    }
+}
+
+if (lote.Count > 0)
+    await EnviarParaOutroSistemaAsync(lote, ct);
+```
+
+### Exemplo 1: Exportação de posições para CSV (milhões de linhas)
+
+Cenário típico: exportar **todas as posições GPS** de um período grande para um arquivo CSV sem estourar a memória do servidor.
+
+```csharp
+public async Task ExportarPosicoesCsvAsync(
+    DateTime inicio,
+    DateTime fim,
+    string caminhoArquivo,
+    CancellationToken ct = default)
+{
+    await using var writer = new StreamWriter(caminhoArquivo);
+    await writer.WriteLineAsync("id_posicao,id_rastreador,lat,lng,velocidade,data_hora");
+
+    var builder = PosicaoRastreador.Query()
+        .Where(p => p.DataHora >= inicio && p.DataHora <= fim)
+        .OrderBy(nameof(PosicaoRastreador.DataHora));
+
+    long total = 0;
+    await foreach (var p in builder.StreamAsync<PosicaoRastreador>(helper, ct))
+    {
+        await writer.WriteLineAsync(
+            $"{p.IdPosicao},{p.IdRastreador},{p.Latitude},{p.Longitude},{p.Velocidade},{p.DataHora:o}");
+        total++;
+    }
+
+    Console.WriteLine($"Exportadas {total:N0} posições para {caminhoArquivo}.");
+}
+```
+
+Diferença com `ExecuteAsync<T>`: uma consulta de 5 milhões de posições que consumiria vários GB de RAM passa a rodar com uso de memória praticamente constante.
+
+### Exemplo 2: Serialização JSON nativa em streaming
+
+O `System.Text.Json` aceita `IAsyncEnumerable<T>` diretamente em `SerializeAsync`, então é possível gerar um JSON array gigante sem buffer intermediário:
+
+```csharp
+public async Task ExportarVeiculosJsonAsync(
+    Stream output,
+    CancellationToken ct = default)
+{
+    var stream = Veiculo.StreamAllAsync(helper, ct);
+
+    // O JsonSerializer consome o IAsyncEnumerable e escreve diretamente no output.
+    await JsonSerializer.SerializeAsync(output, stream, new JsonSerializerOptions
+    {
+        WriteIndented = false,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+    }, ct);
+}
+
+// Uso: gerar um arquivo JSON de 2GB sem encher a RAM
+await using var fs = File.Create("veiculos.json");
+await ExportarVeiculosJsonAsync(fs);
+```
+
+### Exemplo 3: ETL — migrar dados entre bancos em fluxo
+
+Copiar milhões de linhas de uma origem para outra, usando `InsertBatch` com chunks:
+
+```csharp
+public async Task MigrarVeiculosAsync(
+    DatabaseHelper origem,
+    DatabaseHelper destino,
+    CancellationToken ct = default)
+{
+    const int loteSize = 500;
+    var buffer = new List<Veiculo>(loteSize);
+    long totalInseridos = 0;
+
+    await foreach (var v in Veiculo.StreamAllAsync(origem, ct))
+    {
+        buffer.Add(v);
+
+        if (buffer.Count == loteSize)
+        {
+            await using var mysqlDestino = new MySQL(/* connection string destino */);
+            await mysqlDestino.OpenAsync(ct);
+
+            var inseridos = await Veiculo.InsertBatch()
+                .RowsFrom(buffer)
+                .ExecuteAsync(mysqlDestino, ct);
+
+            totalInseridos += inseridos;
+            buffer.Clear();
+        }
+    }
+
+    // Resto
+    if (buffer.Count > 0)
+    {
+        await using var mysqlDestino = new MySQL(/* connection string destino */);
+        await mysqlDestino.OpenAsync(ct);
+        totalInseridos += await Veiculo.InsertBatch().RowsFrom(buffer).ExecuteAsync(mysqlDestino, ct);
+    }
+
+    Console.WriteLine($"Migrados {totalInseridos:N0} veículos.");
+}
+```
+
+> Dica: use **duas** conexões distintas (origem e destino) em vez de reutilizar a mesma — o cursor de leitura do `StreamAllAsync` está segurando uma conexão enquanto o loop está ativo.
+
+### Exemplo 4: Agregações sem carregar o resultado inteiro
+
+Calcular estatísticas (distância total percorrida, velocidade média, quantidade de eventos) sem nunca materializar a lista:
+
+```csharp
+public async Task<EstatisticasVeiculo> CalcularEstatisticasAsync(
+    int idVeiculo,
+    DateTime inicio,
+    DateTime fim,
+    CancellationToken ct = default)
+{
+    long quantidade = 0;
+    double velocidadeTotal = 0;
+    double velocidadeMaxima = 0;
+    double distanciaTotal = 0;
+
+    PosicaoRastreador anterior = null;
+
+    var builder = PosicaoRastreador.Query()
+        .Where(p => p.IdVeiculo == idVeiculo
+                 && p.DataHora >= inicio
+                 && p.DataHora <= fim)
+        .OrderBy(nameof(PosicaoRastreador.DataHora));
+
+    await foreach (var p in builder.StreamAsync<PosicaoRastreador>(helper, ct))
+    {
+        quantidade++;
+        velocidadeTotal += p.Velocidade;
+        if (p.Velocidade > velocidadeMaxima) velocidadeMaxima = p.Velocidade;
+
+        if (anterior != null)
+            distanciaTotal += Haversine(anterior.Latitude, anterior.Longitude, p.Latitude, p.Longitude);
+
+        anterior = p;
+    }
+
+    return new EstatisticasVeiculo
+    {
+        QuantidadePosicoes = quantidade,
+        VelocidadeMedia    = quantidade > 0 ? velocidadeTotal / quantidade : 0,
+        VelocidadeMaxima   = velocidadeMaxima,
+        DistanciaKmTotal   = distanciaTotal,
+    };
+}
+```
+
+### Exemplo 5: Envio para API externa com `HttpClient` em lotes
+
+```csharp
+public async Task SincronizarComApiExternaAsync(
+    HttpClient http,
+    CancellationToken ct = default)
+{
+    const int tamanhoLote = 100;
+    var lote = new List<Veiculo>(tamanhoLote);
+
+    await foreach (var v in Veiculo.StreamAsync(v => v.PendenteSincronizacao, helper, ct))
+    {
+        lote.Add(v);
+        if (lote.Count == tamanhoLote)
+        {
+            await EnviarLoteAsync(http, lote, ct);
+            lote.Clear();
+        }
+    }
+
+    if (lote.Count > 0)
+        await EnviarLoteAsync(http, lote, ct);
+
+    static async Task EnviarLoteAsync(HttpClient http, List<Veiculo> lote, CancellationToken ct)
+    {
+        var resp = await http.PostAsJsonAsync("/api/v1/veiculos/sync", lote, ct);
+        resp.EnsureSuccessStatusCode();
+    }
+}
+```
+
+### Exemplo 6: Paralelismo controlado sobre o stream
+
+Para processar itens em paralelo sem explodir a memória (cada item entra em um "worker" assim que sai do stream), use `Parallel.ForEachAsync` com o stream diretamente:
+
+```csharp
+await Parallel.ForEachAsync(
+    Veiculo.StreamAllAsync(helper, ct),
+    new ParallelOptions { MaxDegreeOfParallelism = 8, CancellationToken = ct },
+    async (veiculo, innerCt) =>
+    {
+        await ProcessarAsync(veiculo, innerCt);
+    });
+```
+
+> Atenção: `Parallel.ForEachAsync` mantém o cursor aberto enquanto itera. Evite operações síncronas bloqueantes dentro do delegate.
+
+### Exemplo 7: Projeção no cliente (post-processamento)
+
+Quando você quer transformar cada item antes de consumir, combine o stream com um `Select` assíncrono simples. O ideal é fazer a projeção direto no SQL (via `Select(...)`), mas caso precise de lógica em C#:
+
+```csharp
+async IAsyncEnumerable<string> PlacasFormatadasAsync([EnumeratorCancellation] CancellationToken ct = default)
+{
+    await foreach (var v in Veiculo.StreamAllAsync(helper, ct))
+    {
+        yield return $"{v.Placa} ({v.Modelo})";
+    }
+}
+
+await foreach (var linha in PlacasFormatadasAsync(ct))
+{
+    Console.WriteLine(linha);
+}
+```
+
+### Exemplo 8: Early-exit com `break` (procurar e parar)
+
+Diferente de `ExecuteAsync<T>`, que só retorna depois de ler tudo, o stream para **imediatamente** quando você sai do loop:
+
+```csharp
+// Encontra a primeira posição suspeita (velocidade > 180) e para de ler o banco na hora
+PosicaoRastreador suspeita = null;
+
+await foreach (var p in PosicaoRastreador.StreamAsync(p => p.IdVeiculo == 42, helper, ct))
+{
+    if (p.Velocidade > 180)
+    {
+        suspeita = p;
+        break; // o reader é fechado aqui; o resto da tabela nem é lido.
+    }
+}
+```
+
+### Cancelamento cooperativo
+
+Todos os métodos aceitam `CancellationToken`. Por se tratar de `IAsyncEnumerable`, você também pode usar o operador `WithCancellation`:
+
+```csharp
+await foreach (var v in Veiculo
+    .StreamAllAsync(mysql)
+    .WithCancellation(cancellationToken))
+{
+    // ...
+}
+```
+
+### Comparação "lista" vs "stream" na prática
+
+O exemplo abaixo ilustra o impacto real quando você precisa processar uma tabela com **1 milhão** de linhas:
+
+```csharp
+// ❌ Carrega TODAS as linhas em memória antes de processar
+//    Pico de memória ~ tamanho_medio_da_linha * 1_000_000
+List<PosicaoRastreador> todas = await PosicaoRastreador.AllAsync(helper, ct);
+foreach (var p in todas)
+{
+    await ProcessarAsync(p, ct);
+}
+// ≈ centenas de MB ou GB de RAM, dependendo do modelo.
+
+// ✅ Processa uma linha por vez, memória praticamente constante
+await foreach (var p in PosicaoRastreador.StreamAllAsync(helper, ct))
+{
+    await ProcessarAsync(p, ct);
+}
+// ≈ alguns KB de RAM por iteração (só a linha corrente).
+```
+
+O tempo total de banco tende a ser **o mesmo** (ou até melhor no stream, porque você começa a processar a primeira linha muito antes). O que muda drasticamente é o **pico de memória** e o **tempo até o primeiro item** (TTFB).
+
+### Quando usar streaming vs. lista
+
+| Situação | Recomendação |
+| -------- | ------------ |
+| Resultado cabe tranquilo em memória (< algumas dezenas de milhares de linhas) | `ExecuteAsync<T>` / `AllAsync` (List em memória) |
+| Resultado grande ou desconhecido, processamento pode ser feito "em fluxo" | `StreamAsync<T>` / `StreamAllAsync` |
+| Exportação para arquivo (CSV/JSON), integração com outro sistema, ETL | `StreamAsync<T>` |
+| Precisa de acesso aleatório ou múltiplas passadas | `ExecuteAsync<T>` (ou cache próprio do consumidor) |
+| Precisa do primeiro item o mais rápido possível (latência baixa) | `StreamAsync<T>` + `break` após encontrar |
+
+### Considerações importantes
+
+- **Tempo de vida da conexão:** enquanto o `await foreach` está ativo, o reader (e, no caso do `DatabaseHelper`, a conexão do pool) fica ocupado. Evite bloqueios longos dentro do loop.
+- **LINQ em cima do stream:** você pode usar `System.Linq.Async` (pacote NuGet separado) para `Select`, `Where`, `Take` etc. sobre `IAsyncEnumerable<T>`, mas nenhum método sai da máquina cliente — filtros de banco devem continuar sendo feitos no `SelectQueryBuilder`.
+- **Não cachear a enumeração:** se precisar iterar duas vezes, reexecute o stream (ele não é reutilizável).
 
 <a id="operacoes-avancadas"></a>
 ## Operações Avançadas

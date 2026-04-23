@@ -121,6 +121,34 @@ public class SelectQueryBuilder
     }
 
     /// <summary>
+    /// Executa o SELECT em modo streaming (<see cref="IAsyncEnumerable{T}"/>), mapeando cada
+    /// linha para <typeparamref name="T"/> sob demanda. Ideal para grandes volumes de dados —
+    /// nada é materializado em lista.
+    /// </summary>
+    /// <typeparam name="T">Tipo do modelo (deve ter construtor sem parâmetros e propriedades mapeáveis).</typeparam>
+    /// <param name="connection">Conexão MySQL aberta.</param>
+    /// <param name="cancellationToken">Token de cancelamento cooperativo.</param>
+    public IAsyncEnumerable<T> StreamAsync<T>(MySQL connection, CancellationToken cancellationToken = default) where T : new()
+    {
+        ArgumentNullException.ThrowIfNull(connection);
+        if (_tableName == null)
+            throw new InvalidOperationException("Tabela não especificada");
+        return connection.ExecuteQueryStreamAsync<T>(this, cancellationToken);
+    }
+
+    /// <summary>
+    /// Versão de <see cref="StreamAsync{T}(MySQL, CancellationToken)"/> que abre/fecha a conexão
+    /// automaticamente via <see cref="DatabaseHelper"/>.
+    /// </summary>
+    public IAsyncEnumerable<T> StreamAsync<T>(DatabaseHelper helper, CancellationToken cancellationToken = default) where T : new()
+    {
+        ArgumentNullException.ThrowIfNull(helper);
+        if (_tableName == null)
+            throw new InvalidOperationException("Tabela não especificada");
+        return helper.ExecuteQueryStreamAsync<T>(this, cancellationToken);
+    }
+
+    /// <summary>
     /// Executa o SELECT com paginação estruturada e retorna um <see cref="PagedResult{T}"/>
     /// contendo os itens da página e metadados de navegação (total, páginas, HasNextPage, etc.).
     /// </summary>
