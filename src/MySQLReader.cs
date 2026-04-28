@@ -798,7 +798,7 @@ public class MySQLReader(DbDataReader dr) : IDisposable, IAsyncDisposable
 
         try
         {
-            return this._dr.Read();
+            return _dr.Read();
         }
         catch (Exception ex)
         {
@@ -1341,8 +1341,8 @@ public class MySQLReader(DbDataReader dr) : IDisposable, IAsyncDisposable
         {
             while (await ReadAsync(cancellationToken))
             {
-                var first = (TFirst)ToModel(typeof(TFirst), firstColumns);
-                var second = (TSecond)ToModel(typeof(TSecond), secondColumns);
+                var first = (TFirst)ToModel(typeof(TFirst), firstColumns)!;
+                var second = (TSecond)ToModel(typeof(TSecond), secondColumns)!;
                 list.Add(map(first, second));
             }
         }

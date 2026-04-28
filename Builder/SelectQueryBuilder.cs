@@ -43,7 +43,7 @@ public class SelectQueryBuilder
         "=", "<>", "!=", "<", "<=", ">", ">=", "LIKE", "NOT LIKE", "IN", "NOT IN", "IS NULL", "IS NOT NULL", "BETWEEN", "REGEXP", "NOT REGEXP", "RAW"
     };
 
-    private string EscapeIdentifier(string identifier)
+    private string EscapeIdentifier(string? identifier)
     {
         if (string.IsNullOrEmpty(identifier)) return identifier;
         if (identifier == "*") return "*";
@@ -623,7 +623,7 @@ public class SelectQueryBuilder
 
     private string BuildInSubqueryClause(WhereCondition condition, MySqlCommand command, string escapedField)
     {
-        var (_, subqueryCommand) = condition.Subquery.Build();
+        var (_, subqueryCommand) = condition.Subquery!.Build();
         RebindParameters(subqueryCommand, command, subqueryCommand.CommandText, out var rewrittenSql);
         return $"{escapedField} {condition.Operator} ({rewrittenSql})";
     }
@@ -780,11 +780,8 @@ public class SelectQueryBuilder
             {
                 var condition = _whereConditions[i];
                 var logic = i > 0 ? condition.Logic : "";
-                string clause = BuildWhereClause(condition, command);
-                if (i > 0)
-                    whereClauses.Add($"{logic} {clause}");
-                else
-                    whereClauses.Add(clause);
+                var clause = BuildWhereClause(condition, command);
+                whereClauses.Add(i > 0 ? $"{logic} {clause}" : clause);
             }
 
             sqlBuilder.Append(" WHERE ");
@@ -800,23 +797,18 @@ public class SelectQueryBuilder
             sqlBuilder.Append(string.Join(", ", _groupBys.Select(EscapeIdentifier)));
         }
 
-        if (_havingConditions.Count > 0)
+        if (_havingConditions.Count <= 0) return;
+        var havingClauses = new List<string>(_havingConditions.Count);
+        for (var i = 0; i < _havingConditions.Count; i++)
         {
-            var havingClauses = new List<string>(_havingConditions.Count);
-            for (int i = 0; i < _havingConditions.Count; i++)
-            {
-                var condition = _havingConditions[i];
-                var logic = i > 0 ? condition.Logic : "";
-                string clause = BuildWhereClause(condition, command);
-                if (i > 0)
-                    havingClauses.Add($"{logic} {clause}");
-                else
-                    havingClauses.Add(clause);
-            }
-
-            sqlBuilder.Append(" HAVING ");
-            sqlBuilder.Append(string.Join(" ", havingClauses));
+            var condition = _havingConditions[i];
+            var logic = i > 0 ? condition.Logic : "";
+            var clause = BuildWhereClause(condition, command);
+            havingClauses.Add(i > 0 ? $"{logic} {clause}" : clause);
         }
+
+        sqlBuilder.Append(" HAVING ");
+        sqlBuilder.Append(string.Join(" ", havingClauses));
     }
 
     private SelectQueryBuilder AddSelectionFields(Type selectionType)
@@ -865,28 +857,13 @@ public class SelectQueryBuilder
     private static List<object> MaterializeValues<T>(IEnumerable<T> values)
     {
         ArgumentNullException.ThrowIfNull(values);
-
-        if (values is ICollection<T> collection)
-        {
-            var result = new List<object>(collection.Count);
-            foreach (var value in collection)
-            {
-                result.Add(value);
-            }
-
-            return result;
-        }
-
-        var list = new List<object>();
-        foreach (var value in values)
-        {
-            list.Add(value);
-        }
-
-        return list;
+        if (values is not ICollection<T> collection) return values.Cast<object>().ToList();
+        var result = new List<object>(collection.Count);
+        result.AddRange(collection.Cast<object>());
+        return result;
     }
 
-    private static void AddParameter(MySqlCommand command, string paramName, object value)
+    private static void AddParameter(MySqlCommand command, string paramName, object? value)
     {
         var parameter = new MySqlParameter($"@{paramName}", value ?? DBNull.Value);
 
@@ -953,11 +930,11 @@ public class SelectQueryBuilder
 
     private class JoinClause
     {
-        public string Table { get; set; }
-        public string First { get; set; }
-        public string Operator { get; set; }
-        public string Second { get; set; }
-        public string Type { get; set; }
+        public string? Table { get; set; }
+        public string? First { get; set; }
+        public string? Operator { get; set; }
+        public string? Second { get; set; }
+        public string? Type { get; set; }
     }
 
     private class WhereCondition

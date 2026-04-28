@@ -18,7 +18,7 @@ public class MySQLShardConfiguration
     /// <summary>
     /// Cache do shard default. Invalidado automaticamente ao adicionar/remover shards.
     /// </summary>
-    private volatile MySQLConfiguration _cachedDefault;
+    private volatile MySQLConfiguration? _cachedDefault;
 
     /// <summary>
     /// Indica se existem shards configurados.

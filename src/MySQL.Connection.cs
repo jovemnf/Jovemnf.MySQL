@@ -24,7 +24,7 @@ public partial class MySQL
 
     public void CreateAdapter(string command)
     {
-        _da = new MySqlDataAdapter(command, this._bdConn);
+        _da = new MySqlDataAdapter(command, _bdConn);
     }
 
     public void Dispose()
