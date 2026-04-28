@@ -258,7 +258,7 @@ public class GeometryPointTests
         };
 
         // Act
-        using var reader = new MySQLReader(new FakeDataReader(data));
+        using var reader = new MySqlReader(new FakeDataReader(data));
         reader.Read();
         var location = reader.ToModel<LocationModel>();
 
@@ -286,7 +286,7 @@ public class GeometryPointTests
         };
 
         // Act
-        using var reader = new MySQLReader(new FakeDataReader(data));
+        using var reader = new MySqlReader(new FakeDataReader(data));
         reader.Read();
         var location = reader.ToModel<LocationModel>();
 

@@ -12,7 +12,7 @@ namespace Jovemnf.MySQL.Builder;
 
 public class InsertBatchQueryBuilder
 {
-    private string _tableName;
+    private string? _tableName;
     private readonly List<Dictionary<string, object>> _rows = [];
     private readonly List<string> _columnOrder = [];
     private readonly HashSet<string> _columnSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -263,13 +263,13 @@ public class InsertBatchQueryBuilder
         _rows.Add(row);
     }
 
-    private object NormalizeValue(object value)
+    private object NormalizeValue(object? value)
     {
         if (value is Point point)
             return new PointValue(point);
         if (value is Polygon polygon)
             return new PolygonValue(polygon);
-        return value;
+        return value!;
     }
 
     private string GetNextParamName() => $"p{_paramCounter++}";
@@ -385,7 +385,7 @@ public class InsertBatchQueryBuilder<T> : InsertBatchQueryBuilder
 
     protected static string GetTableName<TModel>()
     {
-        var attr = (DbTableAttribute)Attribute.GetCustomAttribute(typeof(TModel), typeof(DbTableAttribute));
+        var attr = (DbTableAttribute?)Attribute.GetCustomAttribute(typeof(TModel), typeof(DbTableAttribute));
         return attr?.Name ?? typeof(TModel).Name;
     }
 
@@ -456,7 +456,7 @@ public class InsertBatchQueryBuilder<T> : InsertBatchQueryBuilder
 public class InsertBatchQueryExecutor
 {
     private readonly MySqlConnection _connection;
-    private readonly MySqlTransaction _transaction;
+    private readonly MySqlTransaction? _transaction;
 
     public InsertBatchQueryExecutor(MySqlConnection connection)
     {

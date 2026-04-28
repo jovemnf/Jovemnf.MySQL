@@ -78,7 +78,7 @@ public class JsonDeserializationTests
         };
 
         // Act
-        using var reader = new MySQLReader(new FakeDataReader(data));
+        using var reader = new MySqlReader(new FakeDataReader(data));
         reader.Read();
         var model = reader.ToModel<Telemetria>();
 
@@ -103,7 +103,7 @@ public class JsonDeserializationTests
         };
 
         // Act
-        using var reader = new MySQLReader(new FakeDataReader(data));
+        using var reader = new MySqlReader(new FakeDataReader(data));
         reader.Read();
         var model = reader.ToModel<Telemetria>();
 
@@ -129,7 +129,7 @@ public class JsonDeserializationTests
         };
 
         // Act
-        using var reader = new MySQLReader(new FakeDataReader(data));
+        using var reader = new MySqlReader(new FakeDataReader(data));
         reader.Read();
         var model = reader.ToModel<Telemetria>();
 
@@ -155,7 +155,7 @@ public class JsonDeserializationTests
         };
 
         // Act
-        using var reader = new MySQLReader(new FakeDataReader(data));
+        using var reader = new MySqlReader(new FakeDataReader(data));
         reader.Read();
         var model = reader.ToModel<Person>();
 
@@ -182,7 +182,7 @@ public class JsonDeserializationTests
         };
 
         // Act
-        using var reader = new MySQLReader(new FakeDataReader(data));
+        using var reader = new MySqlReader(new FakeDataReader(data));
         reader.Read();
         var model = reader.ToModel<Order>();
 
@@ -215,7 +215,7 @@ public class JsonDeserializationTests
         };
 
         // Act
-        using var reader = new MySQLReader(new FakeDataReader(data));
+        using var reader = new MySqlReader(new FakeDataReader(data));
         reader.Read();
         var model = reader.ToModel<EventModel>();
 
@@ -240,7 +240,7 @@ public class JsonDeserializationTests
         };
 
         // Act
-        using var reader = new MySQLReader(new FakeDataReader(data));
+        using var reader = new MySqlReader(new FakeDataReader(data));
         reader.Read();
         var model = reader.ToModel<Telemetria>();
 
@@ -263,7 +263,7 @@ public class JsonDeserializationTests
         };
 
         // Act
-        using var reader = new MySQLReader(new FakeDataReader(data));
+        using var reader = new MySqlReader(new FakeDataReader(data));
         reader.Read();
         var model = reader.ToModel<Telemetria>();
 
@@ -288,7 +288,7 @@ public class JsonDeserializationTests
         };
 
         // Act
-        using var reader = new MySQLReader(new FakeDataReader(data));
+        using var reader = new MySqlReader(new FakeDataReader(data));
         reader.Read();
         var model = reader.ToModel<MixedModel>();
 
@@ -315,7 +315,7 @@ public class JsonDeserializationTests
         };
 
         // Act
-        using var reader = new MySQLReader(new FakeDataReader(data));
+        using var reader = new MySqlReader(new FakeDataReader(data));
         reader.Read();
         var model = reader.ToModel<Telemetria>();
 

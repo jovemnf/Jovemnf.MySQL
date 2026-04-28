@@ -55,7 +55,7 @@ public class Point
     /// <summary>
     /// Creates a Point from WKB (Well-Known Binary) format.
     /// </summary>
-    public static Point FromWKB(byte[] wkb)
+    public static Point? FromWKB(byte[]? wkb)
     {
         if (wkb == null || wkb.Length < 25)
             return null;
@@ -79,7 +79,7 @@ public class Point
         return $"POINT({lat}, {lng})";
     }
 
-    public override bool Equals(object obj)
+    public override bool Equals(object? obj)
     {
         if (obj is Point other)
         {

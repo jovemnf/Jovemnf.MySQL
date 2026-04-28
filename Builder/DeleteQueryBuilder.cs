@@ -11,7 +11,7 @@ namespace Jovemnf.MySQL.Builder;
 
 public class DeleteQueryBuilder
 {
-    private string _tableName;
+    private string? _tableName;
 
     public static DeleteQueryBuilder<T> For<T>() => new DeleteQueryBuilder<T>();
 
@@ -336,7 +336,7 @@ public class DeleteQueryBuilder
 
     protected static string GetTableName<T>()
     {
-        var attr = (DbTableAttribute)Attribute.GetCustomAttribute(typeof(T), typeof(DbTableAttribute));
+        var attr = (DbTableAttribute?)Attribute.GetCustomAttribute(typeof(T), typeof(DbTableAttribute));
         return attr?.Name ?? typeof(T).Name;
     }
 
@@ -363,7 +363,7 @@ public class DeleteQueryBuilder
     {
         if (condition.Operator == "RAW")
         {
-            var sql = condition.RawSql;
+            var sql = condition.RawSql ?? string.Empty;
             if (condition.RawParameters != null)
             {
                 for (int i = 0; i < condition.RawParameters.Length; i++)
@@ -386,11 +386,14 @@ public class DeleteQueryBuilder
             case "IN":
             case "NOT IN":
                 var inParams = new List<string>();
-                foreach (var val in condition.Values)
+                if (condition.Values != null)
                 {
-                    var nextParamName = GetNextParamName();
-                    inParams.Add($"@{nextParamName}");
-                    command.Parameters.AddWithValue($"@{nextParamName}", val ?? DBNull.Value);
+                    foreach (var val in condition.Values)
+                    {
+                        var nextParamName = GetNextParamName();
+                        inParams.Add($"@{nextParamName}");
+                        command.Parameters.AddWithValue($"@{nextParamName}", val ?? DBNull.Value);
+                    }
                 }
                 return $"`{EscapeIdentifier(condition.Field)}` {condition.Operator} ({string.Join(", ", inParams)})";
 
@@ -415,14 +418,14 @@ public class DeleteQueryBuilder
 
     private class WhereCondition
     {
-        public string Field { get; set; }
-        public object Value { get; set; }
-        public object SecondValue { get; set; }
-        public List<object> Values { get; set; }
-        public string Operator { get; set; }
-        public string Logic { get; set; }
-        public string RawSql { get; set; }
-        public object[] RawParameters { get; set; }
+        public string Field { get; set; } = string.Empty;
+        public object? Value { get; set; }
+        public object? SecondValue { get; set; }
+        public List<object>? Values { get; set; }
+        public string Operator { get; set; } = string.Empty;
+        public string Logic { get; set; } = string.Empty;
+        public string? RawSql { get; set; }
+        public object[]? RawParameters { get; set; }
     }
 }
 
@@ -466,7 +469,7 @@ public class DeleteQueryBuilder<T> : DeleteQueryBuilder
 public class DeleteQueryExecutor
 {
     private readonly MySqlConnection _connection;
-    private MySqlTransaction _transaction;
+    private MySqlTransaction? _transaction;
 
     public DeleteQueryExecutor(MySqlConnection connection)
     {

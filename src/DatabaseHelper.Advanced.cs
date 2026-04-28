@@ -44,7 +44,7 @@ public partial class DatabaseHelper
         return await mysql.ExecuteInsertBatchAsync(builder, cancellationToken);
     }
 
-    public async Task<MySQLReader> ExecuteQueryAsync(SelectQueryBuilder builder, CancellationToken cancellationToken = default)
+    public async Task<MySqlReader> ExecuteQueryAsync(SelectQueryBuilder builder, CancellationToken cancellationToken = default)
     {
         var mysql = new MySQL(_connectionString, Options);
         await mysql.OpenAsync(cancellationToken);

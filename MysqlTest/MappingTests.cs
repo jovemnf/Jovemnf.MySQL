@@ -43,7 +43,7 @@ public class MappingTests
             }
         };
 
-        using var reader = new MySQLReader(new FakeDataReader(data));
+        using var reader = new MySqlReader(new FakeDataReader(data));
         reader.Read();
         
         var model = reader.ToModel<TestModel>();
@@ -72,7 +72,7 @@ public class MappingTests
             }
         };
 
-        using var reader = new MySQLReader(new FakeDataReader(data));
+        using var reader = new MySqlReader(new FakeDataReader(data));
         reader.Read();
         
         var model = reader.ToModel<TestModel>();
@@ -97,7 +97,7 @@ public class MappingTests
             }
         };
 
-        using var reader = new MySQLReader(new FakeDataReader(data));
+        using var reader = new MySqlReader(new FakeDataReader(data));
         reader.Read();
         
         var model = reader.ToModel<ModelWithAttributes>();
@@ -119,7 +119,7 @@ public class MappingTests
             }
         };
 
-        using var reader = new MySQLReader(new FakeDataReader(data));
+        using var reader = new MySqlReader(new FakeDataReader(data));
         reader.Read();
 
         var model = reader.ToModel<StructTestModel>();
@@ -148,7 +148,7 @@ public class MappingTests
             }
         };
 
-        using var reader = new MySQLReader(new FakeDataReader(data));
+        using var reader = new MySqlReader(new FakeDataReader(data));
         reader.Read();
         
         var model = reader.ToModel<NumericTestModel>();
@@ -176,7 +176,7 @@ public class MappingTests
             }
         };
 
-        using var reader = new MySQLReader(new FakeDataReader(data));
+        using var reader = new MySqlReader(new FakeDataReader(data));
         reader.Read();
 
         var model = reader.ToModel<VehicleSelectionRecord>();
@@ -199,7 +199,7 @@ public class MappingTests
             }
         };
 
-        using var reader = new MySQLReader(new FakeDataReader(data));
+        using var reader = new MySqlReader(new FakeDataReader(data));
 
         var list = await reader.ToModelListAsync<VehicleSelectionRecord>();
 

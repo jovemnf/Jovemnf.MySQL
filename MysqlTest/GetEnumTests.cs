@@ -26,7 +26,7 @@ public class GetEnumTests
             }
         };
 
-        using var reader = new MySQLReader(new FakeDataReader(data));
+        using var reader = new MySqlReader(new FakeDataReader(data));
         reader.Read();
 
         var result = reader.GetEnum<StatusVeiculo>("status");
@@ -45,7 +45,7 @@ public class GetEnumTests
             }
         };
 
-        using var reader = new MySQLReader(new FakeDataReader(data));
+        using var reader = new MySqlReader(new FakeDataReader(data));
         reader.Read();
 
         var result = reader.GetEnum<StatusVeiculo>("status");
@@ -64,7 +64,7 @@ public class GetEnumTests
             }
         };
 
-        using var reader = new MySQLReader(new FakeDataReader(data));
+        using var reader = new MySqlReader(new FakeDataReader(data));
         reader.Read();
 
         var result = reader.GetEnum<StatusVeiculo>("status");
@@ -83,7 +83,7 @@ public class GetEnumTests
             }
         };
 
-        using var reader = new MySQLReader(new FakeDataReader(data));
+        using var reader = new MySqlReader(new FakeDataReader(data));
         reader.Read();
 
         Assert.Throws<InvalidOperationException>(() => reader.GetEnum<StatusVeiculo>("status"));
@@ -100,7 +100,7 @@ public class GetEnumTests
             }
         };
 
-        using var reader = new MySQLReader(new FakeDataReader(data));
+        using var reader = new MySqlReader(new FakeDataReader(data));
         reader.Read();
 
         var result = reader.GetEnum("status", StatusVeiculo.EmAlerta);
@@ -119,7 +119,7 @@ public class GetEnumTests
             }
         };
 
-        using var reader = new MySQLReader(new FakeDataReader(data));
+        using var reader = new MySqlReader(new FakeDataReader(data));
         reader.Read();
 
         var result = reader.GetEnum<StatusVeiculo>("status");
@@ -138,7 +138,7 @@ public class GetEnumTests
             }
         };
 
-        using var reader = new MySQLReader(new FakeDataReader(data));
+        using var reader = new MySqlReader(new FakeDataReader(data));
         reader.Read();
 
         var result = reader.GetNullableEnum<StatusVeiculo>("status");
@@ -158,7 +158,7 @@ public class GetEnumTests
             }
         };
 
-        using var reader = new MySQLReader(new FakeDataReader(data));
+        using var reader = new MySqlReader(new FakeDataReader(data));
         reader.Read();
 
         var result = reader.GetNullableEnum<StatusVeiculo>("status");
@@ -177,7 +177,7 @@ public class GetEnumTests
             }
         };
 
-        using var reader = new MySQLReader(new FakeDataReader(data));
+        using var reader = new MySqlReader(new FakeDataReader(data));
         reader.Read();
 
         var result = reader.GetEnum<StatusVeiculo>("status");

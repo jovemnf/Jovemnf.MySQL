@@ -5,7 +5,7 @@ namespace Jovemnf.MySQL;
 
 public sealed class MySQLOptions
 {
-    public ILogger Logger { get; set; }
+    public ILogger? Logger { get; set; }
     public MySQLMutationProtectionOptions MutationProtection { get; set; } = new();
     public MySQLBulkOptions Bulk { get; set; } = new();
     public Func<string, string> SqlMasker { get; set; } = static sql => sql;
@@ -25,11 +25,11 @@ public sealed class MySQLBulkOptions
 
 public sealed class MySQLCommandLogContext
 {
-    public string Operation { get; init; }
-    public string Sql { get; init; }
-    public string DebugSql { get; init; }
+    public string Operation { get; init; } = string.Empty;
+    public string Sql { get; init; } = string.Empty;
+    public string DebugSql { get; init; } = string.Empty;
     public TimeSpan Duration { get; init; }
     public int? RowsAffected { get; init; }
     public bool HasTransaction { get; init; }
-    public Exception Exception { get; init; }
+    public Exception? Exception { get; init; }
 }

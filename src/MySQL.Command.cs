@@ -19,18 +19,15 @@ public partial class MySQL
 
         try
         {
-            if (this._bdConn == null)
+            if (_bdConn == null)
             {
                 throw new InvalidOperationException("Conexão não foi inicializada.");
             }
 
             // Dispose do comando anterior se existir
-            if (this._cmd != null)
-            {
-                this._cmd.Dispose();
-            }
+            _cmd?.Dispose();
 
-            this._cmd = AttachCommand(new MySqlCommand(sql, this._bdConn));
+            _cmd = AttachCommand(new MySqlCommand(sql, _bdConn));
         }
         catch (Exception ex)
         {
@@ -46,10 +43,7 @@ public partial class MySQL
     public void OpenCommand(string sql, int commandTimeout)
     {
         OpenCommand(sql);
-        if (this._cmd != null)
-        {
-            this._cmd.CommandTimeout = commandTimeout;
-        }
+        _cmd?.CommandTimeout = commandTimeout;
     }
 
     /*
@@ -65,10 +59,10 @@ public partial class MySQL
     /// </summary>
     /// <param name="param">Nome do parâmetro (ex: @nome).</param>
     /// <param name="value">Valor do parâmetro.</param>
-    public void SetParameter(string param, object value)
+    public void SetParameter(string param, object? value)
     {
         EnsureCommandInitialized();
-        this._cmd.Parameters.AddWithValue(param, value ?? DBNull.Value);
+        _cmd?.Parameters.AddWithValue(param, value ?? DBNull.Value);
     }
 
     /// <summary>
@@ -78,7 +72,7 @@ public partial class MySQL
     public void Prepare()
     {
         EnsureCommandInitialized();
-        this._cmd.Prepare();
+        _cmd!.Prepare();
     }
 
     /// <summary>
@@ -95,14 +89,14 @@ public partial class MySQL
     /// <param name="param">Nome do parâmetro (ex: @nome).</param>
     /// <param name="value">Valor do parâmetro.</param>
     /// <param name="dbType">Tipo do parâmetro no banco de dados.</param>
-    public void SetParameter(string param, object value, MySqlDbType dbType)
+    public void SetParameter(string param, object? value, MySqlDbType dbType)
     {
         EnsureCommandInitialized();
         var parameter = new MySqlParameter(param, dbType)
         {
             Value = value ?? DBNull.Value
         };
-        this._cmd.Parameters.Add(parameter);
+        _cmd!.Parameters.Add(parameter);
     }
 
     /// <summary>
@@ -111,13 +105,12 @@ public partial class MySQL
     /// <param name="parameters">Dicionário com nome do parâmetro como chave e valor como valor.</param>
     public void SetParameters(Dictionary<string, object> parameters)
     {
-        if (parameters == null)
-            throw new ArgumentNullException(nameof(parameters));
+        ArgumentNullException.ThrowIfNull(parameters);
 
         EnsureCommandInitialized();
         foreach (var param in parameters)
         {
-            _cmd.Parameters.AddWithValue(param.Key, param.Value ?? DBNull.Value);
+            _cmd!.Parameters.AddWithValue(param.Key, param.Value ?? DBNull.Value);
         }
     }
 
@@ -126,25 +119,10 @@ public partial class MySQL
     /// </summary>
     public void ClearParameters()
     {
-        if (_cmd != null)
-        {
-            _cmd.Parameters.Clear();
-        }
+        _cmd?.Parameters.Clear();
     }
 
-    public MySqlDataAdapter Adapter
-    {
-        get
-        {
-            return this._da;
-        }
-    }
+    public MySqlDataAdapter Adapter => _da!;
 
-    public string CommandText
-    {
-        get
-        {
-            return this._cmd?.CommandText ?? string.Empty;
-        }
-    }
+    public string CommandText => _cmd?.CommandText ?? string.Empty;
 }

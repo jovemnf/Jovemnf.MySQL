@@ -25,7 +25,7 @@ public static class MySQLValueConverterRegistry
         Converters[typeof(TTarget)] = converter;
     }
 
-    public static bool TryConvert(Type targetType, object value, out object convertedValue)
+    public static bool TryConvert(Type targetType, object value, out object? convertedValue)
     {
         var resolvedTargetType = Nullable.GetUnderlyingType(targetType) ?? targetType;
         if (Converters.TryGetValue(resolvedTargetType, out var converter))
@@ -38,7 +38,7 @@ public static class MySQLValueConverterRegistry
         return false;
     }
 
-    internal static bool TryConvert(MemberInfo member, Type targetType, object value, out object convertedValue)
+    internal static bool TryConvert(MemberInfo member, Type targetType, object value, out object? convertedValue)
     {
         var attribute = member?.GetCustomAttribute<DbConverterAttribute>(true);
         if (attribute?.ConverterType == null)
@@ -54,7 +54,7 @@ public static class MySQLValueConverterRegistry
         return true;
     }
 
-    internal static bool TryConvert(ParameterInfo parameter, Type targetType, object value, out object convertedValue)
+    internal static bool TryConvert(ParameterInfo parameter, Type targetType, object value, out object? convertedValue)
     {
         var attribute = parameter?.GetCustomAttribute<DbConverterAttribute>(true);
         if (attribute?.ConverterType == null)

@@ -316,7 +316,7 @@ public class GeometryPolygonTests
         };
 
         // Act
-        using var reader = new MySQLReader(new FakeDataReader(data));
+        using var reader = new MySqlReader(new FakeDataReader(data));
         reader.Read();
         var zone = reader.ToModel<ZoneModel>();
 
@@ -344,7 +344,7 @@ public class GeometryPolygonTests
         };
 
         // Act
-        using var reader = new MySQLReader(new FakeDataReader(data));
+        using var reader = new MySqlReader(new FakeDataReader(data));
         reader.Read();
         var zone = reader.ToModel<ZoneModel>();
 

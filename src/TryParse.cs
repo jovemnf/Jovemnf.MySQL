@@ -116,7 +116,7 @@ namespace Jovemnf.MySQL
             }
         }
 
-        public static object ChangeType(object value, Type targetType)
+        public static object? ChangeType(object? value, Type targetType)
         {
             if (value == null || value == DBNull.Value)
                 return null;
@@ -130,7 +130,7 @@ namespace Jovemnf.MySQL
             if (targetType == typeof(short)) return ToInt16(value);
             if (targetType == typeof(byte)) return ToByte(value);
             if (targetType == typeof(Guid)) return ToGuid(value);
-            if (targetType == typeof(string)) return value.ToString();
+            if (targetType == typeof(string)) return value?.ToString();
             if (targetType == typeof(DateTime)) return Convert.ToDateTime(value);
             if (targetType == typeof(TimeSpan)) return ToTimeSpan(value);
 
@@ -156,7 +156,7 @@ namespace Jovemnf.MySQL
             }
         }
 
-        public static int ToInt32(object value)
+        public static int ToInt32(object? value)
         {
             try
             {

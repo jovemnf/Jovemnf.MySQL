@@ -178,7 +178,7 @@ public class AdvancedOrmFeaturesTests
             }
         };
 
-        await using var reader = new MySQLReader(new FakeDataReader(data));
+        await using var reader = new MySqlReader(new FakeDataReader(data));
         using var cts = new CancellationTokenSource();
         var models = await reader.ToModelListAsync<TestModel>(cts.Token);
 
@@ -201,7 +201,7 @@ public class AdvancedOrmFeaturesTests
             }
         };
 
-        using var reader = new MySQLReader(new FakeDataReader(data));
+        using var reader = new MySqlReader(new FakeDataReader(data));
         reader.Read();
 
         var model = reader.ToModel<VehicleWithConverters>();
@@ -224,7 +224,7 @@ public class AdvancedOrmFeaturesTests
             }
         };
 
-        await using var reader = new MySQLReader(new FakeDataReader(data));
+        await using var reader = new MySqlReader(new FakeDataReader(data));
         var result = await reader.ToMultiMapListAsync<JoinUser, JoinTracker, UserTrackerView>(
             (user, tracker) => new UserTrackerView(user.Name, tracker.Code),
             splitOn: "tracker_id");

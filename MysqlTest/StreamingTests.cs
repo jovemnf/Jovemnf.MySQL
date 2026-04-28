@@ -32,7 +32,7 @@ public class StreamingTests
     [Fact]
     public async Task ToModelStreamAsync_YieldsEachRow_WithoutMaterializingList()
     {
-        await using var reader = new MySQLReader(new FakeDataReader(BuildRows(5)));
+        await using var reader = new MySqlReader(new FakeDataReader(BuildRows(5)));
 
         var nomes = new List<string>();
         await foreach (var p in reader.ToModelStreamAsync<Pessoa>())
@@ -46,7 +46,7 @@ public class StreamingTests
     [Fact]
     public async Task ToModelStreamAsync_SupportsBreak_WithoutReadingAllRows()
     {
-        await using var reader = new MySQLReader(new FakeDataReader(BuildRows(1000)));
+        await using var reader = new MySqlReader(new FakeDataReader(BuildRows(1000)));
 
         int count = 0;
         await foreach (var p in reader.ToModelStreamAsync<Pessoa>())
@@ -64,7 +64,7 @@ public class StreamingTests
     [Fact]
     public async Task ToModelStreamAsync_EmptyResult_EnumeratesZeroItems()
     {
-        await using var reader = new MySQLReader(new FakeDataReader(new List<Dictionary<string, object>>()));
+        await using var reader = new MySqlReader(new FakeDataReader(new List<Dictionary<string, object>>()));
 
         int count = 0;
         await foreach (var _ in reader.ToModelStreamAsync<Pessoa>())
@@ -80,10 +80,10 @@ public class StreamingTests
     {
         var rows = BuildRows(50);
 
-        await using var listReader = new MySQLReader(new FakeDataReader(rows));
+        await using var listReader = new MySqlReader(new FakeDataReader(rows));
         var listResult = await listReader.ToModelListAsync<Pessoa>();
 
-        await using var streamReader = new MySQLReader(new FakeDataReader(rows));
+        await using var streamReader = new MySqlReader(new FakeDataReader(rows));
         var streamResult = new List<Pessoa>();
         await foreach (var p in streamReader.ToModelStreamAsync<Pessoa>())
         {

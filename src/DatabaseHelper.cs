@@ -64,7 +64,7 @@ namespace Jovemnf.MySQL
         }
 
         // Executar select com connection automática
-        public async Task<MySQLReader> ExecuteQueryAsync(SelectQueryBuilder builder)
+        public async Task<MySqlReader> ExecuteQueryAsync(SelectQueryBuilder builder)
         {
             var connection = new MySqlConnection(_connectionString);
             await connection.OpenAsync();

@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq.Expressions;
 
 namespace Jovemnf.MySQL.Builder;
@@ -97,8 +98,8 @@ internal static class WhereExpressionTranslator
 
     private static bool TryTranslateComparison(
         BinaryExpression expression,
-        out string field,
-        out object value,
+        [MaybeNullWhen(false)] out string field,
+        out object? value,
         out QueryOperator op)
     {
         if (TryGetMemberField(expression.Left, out field) &&
@@ -121,7 +122,7 @@ internal static class WhereExpressionTranslator
         return false;
     }
 
-    private static QueryOperator MapOperator(ExpressionType nodeType, bool reverse, object value)
+    private static QueryOperator MapOperator(ExpressionType nodeType, bool reverse, object? value)
     {
         if (value == null)
         {
@@ -150,7 +151,7 @@ internal static class WhereExpressionTranslator
         };
     }
 
-    private static bool TryTranslateBooleanMember(Expression expression, out string field, out object value)
+    private static bool TryTranslateBooleanMember(Expression expression, [MaybeNullWhen(false)] out string field, [MaybeNullWhen(false)] out object value)
     {
         if (TryGetMemberField(expression, out field))
         {
@@ -315,7 +316,7 @@ internal static class WhereExpressionTranslator
         }
 
         var parameter = lambdaExpression.Parameters[0];
-        string field;
+        string? field;
 
         if (IsLambdaParameterReference(predicateBody.Left, parameter) &&
             TryGetMemberField(predicateBody.Right, out field))
@@ -342,14 +343,14 @@ internal static class WhereExpressionTranslator
         }
 
         condition = new TranslatedWhereCondition(
-            field,
+            field!,
             enumerable,
             isNegated ? QueryOperator.NotIn : QueryOperator.In,
             IsOr: false);
         return true;
     }
 
-    private static bool TryGetMemberField(Expression expression, out string field)
+    private static bool TryGetMemberField(Expression expression, [MaybeNullWhen(false)] out string field)
     {
         expression = StripConvert(expression);
 
@@ -370,7 +371,7 @@ internal static class WhereExpressionTranslator
         return expression == parameter;
     }
 
-    private static bool TryEvaluateValue(Expression expression, out object value)
+    private static bool TryEvaluateValue(Expression expression, out object? value)
     {
         expression = StripConvert(expression);
 
@@ -489,7 +490,7 @@ internal static class WhereExpressionTranslator
         BinaryExpression expression,
         Func<string, string> resolveField,
         List<object> parameters,
-        out string sql)
+        [MaybeNullWhen(false)] out string sql)
     {
         if (TryGetMemberField(expression.Left, out var field) &&
             TryEvaluateValue(expression.Right, out var value))
@@ -513,7 +514,7 @@ internal static class WhereExpressionTranslator
         string field,
         ExpressionType nodeType,
         bool reverse,
-        object value,
+        object? value,
         List<object> parameters)
     {
         var escapedField = EscapeIdentifier(field);
@@ -536,7 +537,7 @@ internal static class WhereExpressionTranslator
         Expression expression,
         Func<string, string> resolveField,
         List<object> parameters,
-        out string sql)
+        [MaybeNullWhen(false)] out string sql)
     {
         if (TryTranslateBooleanMember(expression, out var field, out var value))
         {
@@ -555,7 +556,7 @@ internal static class WhereExpressionTranslator
         Func<string, string> resolveField,
         List<object> parameters,
         bool isNegated,
-        out string sql)
+        [MaybeNullWhen(false)] out string sql)
     {
         expression = StripConvert(expression);
 
@@ -583,7 +584,7 @@ internal static class WhereExpressionTranslator
         Func<string, string> resolveField,
         List<object> parameters,
         bool isNegated,
-        out string sql)
+        [MaybeNullWhen(false)] out string sql)
     {
         if (expression.Object == null ||
             expression.Object.Type != typeof(string) ||
@@ -620,7 +621,7 @@ internal static class WhereExpressionTranslator
         Func<string, string> resolveField,
         List<object> parameters,
         bool isNegated,
-        out string sql)
+        [MaybeNullWhen(false)] out string sql)
     {
         if (!string.Equals(expression.Method.Name, nameof(string.Contains), StringComparison.Ordinal) ||
             expression.Arguments.Count == 0)
@@ -680,7 +681,7 @@ internal static class WhereExpressionTranslator
         Func<string, string> resolveField,
         List<object> parameters,
         bool isNegated,
-        out string sql)
+        [MaybeNullWhen(false)] out string sql)
     {
         if (!string.Equals(expression.Method.Name, "Any", StringComparison.Ordinal) ||
             expression.Arguments.Count != 2)
@@ -708,7 +709,7 @@ internal static class WhereExpressionTranslator
         if (TryTranslateEnumerableAny(expression, isNegated, out var condition))
         {
             var placeholderIndexes = new List<string>();
-            foreach (var value in (IEnumerable)condition.Value)
+            foreach (var value in (IEnumerable)condition.Value!)
             {
                 var index = AddParameter(parameters, value);
                 placeholderIndexes.Add($"{{{index}}}");
@@ -760,9 +761,9 @@ internal static class WhereExpressionTranslator
         }
     }
 
-    private static int AddParameter(List<object> parameters, object value)
+    private static int AddParameter(List<object> parameters, object? value)
     {
-        parameters.Add(value);
+        parameters.Add(value!);
         return parameters.Count - 1;
     }
 
@@ -786,7 +787,7 @@ internal static class WhereExpressionTranslator
     private readonly record struct RawTranslationResult(string Sql, int Precedence);
     internal readonly record struct TranslatedWhereCondition(
         string Field,
-        object Value,
+        object? Value,
         QueryOperator Operator,
         bool IsOr);
 

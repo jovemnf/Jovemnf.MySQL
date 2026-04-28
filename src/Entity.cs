@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
@@ -225,7 +226,7 @@ public abstract class Entity<TSelf> where TSelf : Entity<TSelf>, new()
     /// <param name="pkValues">Valor(es) da chave primária, na ordem definida pelos atributos.</param>
     /// <exception cref="InvalidOperationException">A entidade não declara <see cref="DbPrimaryKeyAttribute"/>.</exception>
     /// <exception cref="ArgumentException">Quantidade de valores difere do número de colunas da PK.</exception>
-    public static async Task<TSelf> FindByPkAsync(MySQL connection, params object[] pkValues)
+    public static async Task<TSelf?> FindByPkAsync(MySQL connection, params object[] pkValues)
     {
         var builder = BuildFindByPkQuery(pkValues);
         ArgumentNullException.ThrowIfNull(connection);
@@ -236,7 +237,7 @@ public abstract class Entity<TSelf> where TSelf : Entity<TSelf>, new()
     /// <summary>
     /// Versão com <see cref="CancellationToken"/> de <see cref="FindByPkAsync(MySQL, object[])"/>.
     /// </summary>
-    public static async Task<TSelf> FindByPkAsync(MySQL connection, CancellationToken cancellationToken, params object[] pkValues)
+    public static async Task<TSelf?> FindByPkAsync(MySQL connection, CancellationToken cancellationToken, params object[] pkValues)
     {
         var builder = BuildFindByPkQuery(pkValues);
         ArgumentNullException.ThrowIfNull(connection);
@@ -247,7 +248,7 @@ public abstract class Entity<TSelf> where TSelf : Entity<TSelf>, new()
     /// <summary>
     /// Versão que utiliza um <see cref="DatabaseHelper"/> (abre/fecha conexão automaticamente).
     /// </summary>
-    public static async Task<TSelf> FindByPkAsync(DatabaseHelper helper, params object[] pkValues)
+    public static async Task<TSelf?> FindByPkAsync(DatabaseHelper helper, params object[] pkValues)
     {
         var builder = BuildFindByPkQuery(pkValues);
         ArgumentNullException.ThrowIfNull(helper);
@@ -265,7 +266,7 @@ public abstract class Entity<TSelf> where TSelf : Entity<TSelf>, new()
     /// Dicionário no formato <c>{ "coluna_ou_propriedade", valor }</c>.
     /// Aceita tanto o nome da coluna do banco quanto o nome da propriedade do modelo.
     /// </param>
-    public static async Task<TSelf> FindByPkAsync(MySQL connection, IReadOnlyDictionary<string, object> pkValues)
+    public static async Task<TSelf?> FindByPkAsync(MySQL connection, IReadOnlyDictionary<string, object> pkValues)
     {
         var builder = BuildFindByPkQuery(pkValues);
         ArgumentNullException.ThrowIfNull(connection);
@@ -277,7 +278,7 @@ public abstract class Entity<TSelf> where TSelf : Entity<TSelf>, new()
     /// Versão de <see cref="FindByPkAsync(MySQL, IReadOnlyDictionary{string, object})"/>
     /// que utiliza um <see cref="DatabaseHelper"/>.
     /// </summary>
-    public static async Task<TSelf> FindByPkAsync(DatabaseHelper helper, IReadOnlyDictionary<string, object> pkValues)
+    public static async Task<TSelf?> FindByPkAsync(DatabaseHelper helper, IReadOnlyDictionary<string, object> pkValues)
     {
         var builder = BuildFindByPkQuery(pkValues);
         ArgumentNullException.ThrowIfNull(helper);
@@ -347,7 +348,7 @@ public abstract class Entity<TSelf> where TSelf : Entity<TSelf>, new()
         return builder;
     }
 
-    private static bool TryGetPrimaryKeyValue(IReadOnlyDictionary<string, object> values, PrimaryKeyMapping pk, out object value)
+    private static bool TryGetPrimaryKeyValue(IReadOnlyDictionary<string, object> values, PrimaryKeyMapping pk, [MaybeNullWhen(false)] out object value)
     {
         foreach (var pair in values)
         {

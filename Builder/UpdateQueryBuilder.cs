@@ -15,7 +15,7 @@ namespace Jovemnf.MySQL.Builder;
 
 public class UpdateQueryBuilder
 {
-    private string _tableName;
+    private string? _tableName;
 
     public static UpdateQueryBuilder<T> For<T>() => new UpdateQueryBuilder<T>();
 
@@ -83,7 +83,7 @@ public class UpdateQueryBuilder
     /// <typeparam name="T">Tipo do modelo (deve ter construtor sem parâmetros e propriedades mapeáveis).</typeparam>
     /// <param name="connection">Conexão MySQL.</param>
     /// <returns>A entidade atualizada ou default se nenhuma linha foi afetada.</returns>
-    public Task<T> ExecuteAsync<T>(MySQL connection) where T : new()
+    public Task<T?> ExecuteAsync<T>(MySQL connection) where T : new()
     {
         ArgumentNullException.ThrowIfNull(connection);
         if (_tableName == null) 
@@ -94,7 +94,7 @@ public class UpdateQueryBuilder
         return connection.ExecuteUpdateAsync<T>(this);
     }
 
-    public Task<T> ExecuteAsync<T>(MySQL connection, CancellationToken cancellationToken) where T : new()
+    public Task<T?> ExecuteAsync<T>(MySQL connection, CancellationToken cancellationToken) where T : new()
     {
         ArgumentNullException.ThrowIfNull(connection);
         if (_tableName == null)
@@ -502,7 +502,7 @@ public class UpdateQueryBuilder
 
     protected static string GetTableName<T>()
     {
-        var attr = (DbTableAttribute)Attribute.GetCustomAttribute(typeof(T), typeof(DbTableAttribute));
+        var attr = (DbTableAttribute?)Attribute.GetCustomAttribute(typeof(T), typeof(DbTableAttribute));
         return attr?.Name ?? typeof(T).Name;
     }
 
@@ -515,7 +515,7 @@ public class UpdateQueryBuilder
     {
         if (condition.Operator == "RAW")
         {
-            var sql = condition.RawSql;
+            var sql = condition.RawSql ?? string.Empty;
             if (condition.RawParameters != null)
             {
                 for (int i = 0; i < condition.RawParameters.Length; i++)
@@ -539,8 +539,9 @@ public class UpdateQueryBuilder
 
             case "IN":
             case "NOT IN":
-                var inParams = new List<string>(condition.Values.Count);
-                foreach (var val in condition.Values)
+                var values = condition.Values ?? new List<object>();
+                var inParams = new List<string>(values.Count);
+                foreach (var val in values)
                 {
                     var nextParamName = GetNextParamName();
                     inParams.Add($"@{nextParamName}");
@@ -551,13 +552,13 @@ public class UpdateQueryBuilder
             case "BETWEEN":
                 var startParam = GetNextParamName();
                 var endParam = GetNextParamName();
-                AddParameter(command, startParam, condition.Value);
-                AddParameter(command, endParam, condition.SecondValue);
+                AddParameter(command, startParam, condition.Value!);
+                AddParameter(command, endParam, condition.SecondValue!);
                 return $"`{escapedField}` BETWEEN @{startParam} AND @{endParam}";
 
             default:
                 var paramName = GetNextParamName();
-                AddParameter(command, paramName, condition.Value);
+                AddParameter(command, paramName, condition.Value!);
                 return $"`{escapedField}` {condition.Operator} @{paramName}";
         }
     }
@@ -576,6 +577,7 @@ public class UpdateQueryBuilder
             var result = new List<object>(collection.Count);
             foreach (var value in collection)
             {
+                if (value is null) continue;
                 result.Add(value);
             }
 
@@ -585,6 +587,7 @@ public class UpdateQueryBuilder
         var list = new List<object>();
         foreach (var value in values)
         {
+            if (value is null) continue;
             list.Add(value);
         }
 
@@ -653,14 +656,14 @@ public class UpdateQueryBuilder
 
     private class WhereCondition
     {
-        public string Field { get; set; }
-        public object Value { get; set; }
-        public object SecondValue { get; set; }
-        public List<object> Values { get; set; }
-        public string Operator { get; set; }
-        public string Logic { get; set; }
-        public string RawSql { get; set; }
-        public object[] RawParameters { get; set; }
+        public string Field { get; set; } = string.Empty;
+        public object? Value { get; set; }
+        public object? SecondValue { get; set; }
+        public List<object>? Values { get; set; }
+        public string Operator { get; set; } = string.Empty;
+        public string Logic { get; set; } = string.Empty;
+        public string? RawSql { get; set; }
+        public object[]? RawParameters { get; set; }
     }
 
     // Helper class to mark Point values for special handling
@@ -717,7 +720,7 @@ public class UpdateQueryBuilder<T> : UpdateQueryBuilder
 public class UpdateQueryExecutor
 {
     private readonly MySqlConnection _connection;
-    private MySqlTransaction _transaction;
+    private MySqlTransaction? _transaction;
 
     public UpdateQueryExecutor(MySqlConnection connection)
     {
@@ -828,8 +831,8 @@ public class UpdateResult
 {
     public bool Success { get; set; }
     public int RowsAffected { get; set; }
-    public string Sql { get; set; }
+    public string Sql { get; set; } = string.Empty;
     public TimeSpan ExecutionTime { get; set; }
-    public string Error { get; set; }
-    public Exception Exception { get; set; }
+    public string? Error { get; set; }
+    public Exception? Exception { get; set; }
 }

@@ -53,7 +53,7 @@ public partial class MySQL
         var (_, command) = builder.Build();
         AttachCommand(command);
 
-        var rowsAffected = await ExecuteNonQueryLoggedAsync("Insert", this._cmd, cancellationToken);
+        var rowsAffected = await ExecuteNonQueryLoggedAsync("Insert", _cmd, cancellationToken);
         return lastId ? await LastIdAsyncLong(cancellationToken) : rowsAffected;
     }
 
@@ -62,10 +62,10 @@ public partial class MySQL
         var (_, command) = builder.Build();
         AttachCommand(command);
 
-        return await ExecuteNonQueryLoggedAsync("InsertBatch", this._cmd, cancellationToken);
+        return await ExecuteNonQueryLoggedAsync("InsertBatch", _cmd, cancellationToken);
     }
 
-    public async Task<T> ExecuteInsertAsync<T>(InsertQueryBuilder builder, CancellationToken cancellationToken) where T : new()
+    public async Task<T?> ExecuteInsertAsync<T>(InsertQueryBuilder builder, CancellationToken cancellationToken) where T : new()
     {
         var lastId = await ExecuteInsertAsync(builder, lastId: true, cancellationToken);
         if (lastId <= 0)
@@ -75,19 +75,19 @@ public partial class MySQL
         AttachCommand(cmdSel, trackAsCurrent: false);
 
         await using var reader = await ExecuteReaderLoggedAsync("InsertSelect", cmdSel, cancellationToken);
-        await using var mysqlReader = new MySQLReader(reader);
+        await using var mysqlReader = new MySqlReader(reader);
         var list = await mysqlReader.ToModelListAsync<T>(cancellationToken);
         return list.Count > 0 ? list[0] : default;
     }
 
-    public async Task<MySQLReader> ExecuteQueryAsync(CancellationToken cancellationToken = default)
+    public async Task<MySqlReader> ExecuteQueryAsync(CancellationToken cancellationToken = default)
     {
         EnsureCommandInitialized();
-        var reader = await ExecuteReaderLoggedAsync("Query", this._cmd, cancellationToken);
-        return new MySQLReader(reader);
+        var reader = await ExecuteReaderLoggedAsync("Query", this._cmd!, cancellationToken);
+        return new MySqlReader(reader);
     }
 
-    public async Task<MySQLReader> ExecuteQueryAsync(SelectQueryBuilder builder, CancellationToken cancellationToken = default)
+    public async Task<MySqlReader> ExecuteQueryAsync(SelectQueryBuilder builder, CancellationToken cancellationToken = default)
     {
         var (_, command) = builder.Build();
         AttachCommand(command);
@@ -114,7 +114,7 @@ public partial class MySQL
     {
         var (_, command) = builder.BuildCount();
         AttachCommand(command);
-        var result = await ExecuteScalarLoggedAsync("Count", this._cmd, cancellationToken);
+        var result = await ExecuteScalarLoggedAsync("Count", this._cmd!, cancellationToken);
         return Convert.ToInt64(result);
     }
 
@@ -122,7 +122,7 @@ public partial class MySQL
     {
         var (_, command) = builder.BuildExists();
         AttachCommand(command);
-        var result = await ExecuteScalarLoggedAsync("Exists", _cmd, cancellationToken);
+        var result = await ExecuteScalarLoggedAsync("Exists", _cmd!, cancellationToken);
         return result != null && result != DBNull.Value && Convert.ToInt64(result) > 0;
     }
 
@@ -171,7 +171,7 @@ public partial class MySQL
         return await ExecuteUpdateAsync(cancellationToken);
     }
 
-    public async Task<T> ExecuteUpdateAsync<T>(UpdateQueryBuilder builder, CancellationToken cancellationToken) where T : new()
+    public async Task<T?> ExecuteUpdateAsync<T>(UpdateQueryBuilder builder, CancellationToken cancellationToken) where T : new()
     {
         var (_, cmdUp) = builder.Build();
         AttachCommand(cmdUp, trackAsCurrent: false);
@@ -184,7 +184,7 @@ public partial class MySQL
         AttachCommand(cmdSel, trackAsCurrent: false);
 
         await using var reader = await ExecuteReaderLoggedAsync("UpdateSelect", cmdSel, cancellationToken);
-        await using var mysqlReader = new MySQLReader(reader);
+        await using var mysqlReader = new MySqlReader(reader);
         var list = await mysqlReader.ToModelListAsync<T>(cancellationToken);
         return list.Count > 0 ? list[0] : default;
     }
@@ -203,7 +203,7 @@ public partial class MySQL
         AttachCommand(cmdSel, trackAsCurrent: false);
 
         await using var reader = await ExecuteReaderLoggedAsync("DeleteSelect", cmdSel, cancellationToken);
-        await using var mysqlReader = new MySQLReader(reader);
+        await using var mysqlReader = new MySqlReader(reader);
         var list = await mysqlReader.ToModelListAsync<T>(cancellationToken);
 
         var (_, cmdDel) = builder.Build();
@@ -224,16 +224,16 @@ public partial class MySQL
     public async Task PrepareAsync(CancellationToken cancellationToken)
     {
         EnsureCommandInitialized();
-        await this._cmd.PrepareAsync(cancellationToken);
+        await _cmd!.PrepareAsync(cancellationToken);
     }
 
-    public async Task<object> ExecuteScalarAsync(CancellationToken cancellationToken = default)
+    public async Task<object?> ExecuteScalarAsync(CancellationToken cancellationToken = default)
     {
         EnsureCommandInitialized();
-        return await ExecuteScalarLoggedAsync("Scalar", this._cmd, cancellationToken);
+        return await ExecuteScalarLoggedAsync("Scalar", _cmd!, cancellationToken);
     }
 
-    public async Task<object> ExecuteScalarAsync(string sql, CancellationToken cancellationToken = default)
+    public async Task<object?> ExecuteScalarAsync(string sql, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrEmpty(sql))
             throw new ArgumentException("SQL não pode ser vazio.", nameof(sql));
@@ -255,8 +255,8 @@ public partial class MySQL
         if (_bdConn == null)
             throw new InvalidOperationException("Conexão não foi inicializada.");
 
-        bool wasTransactionActive = _initTrans;
-        int totalRowsAffected = 0;
+        var wasTransactionActive = _initTrans;
+        var totalRowsAffected = 0;
 
         try
         {
@@ -293,7 +293,7 @@ public partial class MySQL
             if (_bdConn == null)
                 return false;
 
-            bool wasOpen = _bdConn.State == ConnectionState.Open;
+            var wasOpen = _bdConn.State == ConnectionState.Open;
             if (!wasOpen)
                 await OpenAsync(cancellationToken);
 
@@ -317,7 +317,7 @@ public partial class MySQL
         await WithTransactionAsync<object>(async db =>
         {
             await action(db);
-            return null;
+            return null!;
         }, cancellationToken);
     }
 
@@ -408,7 +408,7 @@ public partial class MySQL
 
     private async Task<int> BulkInsertInternalAsync<T>(
         IEnumerable<T> items,
-        Action<InsertBatchQueryBuilder<T>> configureUpsert,
+        Action<InsertBatchQueryBuilder<T>>? configureUpsert,
         int? chunkSize,
         CancellationToken cancellationToken)
     {
@@ -444,12 +444,12 @@ public partial class MySQL
             yield return bucket;
     }
 
-    private async Task<int> ExecuteNonQueryLoggedAsync(string operation, MySqlCommand command, CancellationToken cancellationToken)
+    private async Task<int> ExecuteNonQueryLoggedAsync(string operation, MySqlCommand? command, CancellationToken cancellationToken)
     {
         var stopwatch = Stopwatch.StartNew();
         try
         {
-            var rowsAffected = await command.ExecuteNonQueryAsync(cancellationToken);
+            var rowsAffected = await command!.ExecuteNonQueryAsync(cancellationToken);
             LogSuccess(operation, command, stopwatch.Elapsed, rowsAffected);
             return rowsAffected;
         }
@@ -460,7 +460,7 @@ public partial class MySQL
         }
     }
 
-    private async Task<object> ExecuteScalarLoggedAsync(string operation, MySqlCommand command, CancellationToken cancellationToken)
+    private async Task<object?> ExecuteScalarLoggedAsync(string operation, MySqlCommand command, CancellationToken cancellationToken)
     {
         var stopwatch = Stopwatch.StartNew();
         try
@@ -495,8 +495,8 @@ public partial class MySQL
     private async Task<long> LastIdAsyncLong(CancellationToken cancellationToken)
     {
         EnsureCommandInitialized();
-        this._cmd.CommandText = "SELECT LAST_INSERT_ID()";
-        object result = await ExecuteScalarLoggedAsync("LastInsertId", this._cmd, cancellationToken);
+        _cmd!.CommandText = "SELECT LAST_INSERT_ID()";
+        object? result = await ExecuteScalarLoggedAsync("LastInsertId", this._cmd, cancellationToken);
         return result != null ? Convert.ToInt64(result) : 0;
     }
 
@@ -516,7 +516,7 @@ public partial class MySQL
             MaskSql(BuildDebugSql(command)));
     }
 
-    private void LogFailure(string operation, MySqlCommand command, TimeSpan elapsed, Exception exception)
+    private void LogFailure(string operation, MySqlCommand? command, TimeSpan elapsed, Exception exception)
     {
         var logger = Options?.Logger ?? DefaultOptions.Logger;
         if (logger == null)
@@ -528,7 +528,7 @@ public partial class MySQL
             operation,
             elapsed.TotalMilliseconds,
             HasActiveTransaction,
-            command.CommandText,
+            command!.CommandText,
             MaskSql(BuildDebugSql(command)));
     }
 
@@ -541,7 +541,7 @@ public partial class MySQL
     internal static string BuildDebugSql(MySqlCommand command)
     {
         var sql = command.CommandText;
-        foreach (MySqlParameter parameter in command.Parameters.Cast<MySqlParameter>().OrderByDescending(p => p.ParameterName.Length))
+        foreach (var parameter in command.Parameters.OrderByDescending(p => p.ParameterName.Length))
         {
             sql = sql.Replace(parameter.ParameterName, FormatValue(parameter.Value), StringComparison.Ordinal);
         }
@@ -549,7 +549,7 @@ public partial class MySQL
         return sql;
     }
 
-    private static string FormatValue(object value)
+    private static string FormatValue(object? value)
     {
         if (value == null || value == DBNull.Value)
             return "NULL";

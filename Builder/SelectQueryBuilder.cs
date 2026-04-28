@@ -16,7 +16,7 @@ namespace Jovemnf.MySQL.Builder;
 
 public class SelectQueryBuilder
 {
-    private string _tableName;
+    private string? _tableName;
 
     public static SelectQueryBuilder<T> For<T>() => new SelectQueryBuilder<T>();
     private List<SelectionField> _fields = new List<SelectionField>();
@@ -45,7 +45,7 @@ public class SelectQueryBuilder
 
     private string EscapeIdentifier(string? identifier)
     {
-        if (string.IsNullOrEmpty(identifier)) return identifier;
+        if (string.IsNullOrEmpty(identifier)) return string.Empty;
         if (identifier == "*") return "*";
         
         // Handle table.column
@@ -90,7 +90,7 @@ public class SelectQueryBuilder
         return connection.ExecuteQueryAsync(this);
     }
 
-    public Task<MySQLReader> ExecuteAsync(MySQL connection, CancellationToken cancellationToken)
+    public Task<MySqlReader> ExecuteAsync(MySQL connection, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(connection);
         if (_tableName == null)
@@ -518,7 +518,7 @@ public class SelectQueryBuilder
 
     protected static string GetTableName<T>()
     {
-        var attr = (DbTableAttribute)Attribute.GetCustomAttribute(typeof(T), typeof(DbTableAttribute));
+        var attr = (DbTableAttribute?)Attribute.GetCustomAttribute(typeof(T), typeof(DbTableAttribute));
         return attr?.Name ?? typeof(T).Name;
     }
 
@@ -556,7 +556,7 @@ public class SelectQueryBuilder
     {
         if (condition.Operator == "RAW")
         {
-            string sql = condition.RawSql;
+            string sql = condition.RawSql ?? string.Empty;
             if (condition.RawParameters != null)
             {
                 var parameterTokens = new List<(string Token, string ParameterName)>(condition.RawParameters.Length);
@@ -596,8 +596,9 @@ public class SelectQueryBuilder
                 if (condition.Subquery != null)
                     return BuildInSubqueryClause(condition, command, escapedField);
 
-                var inParams = new List<string>(condition.Values.Count);
-                foreach (var val in condition.Values)
+                var values = condition.Values ?? new List<object>();
+                var inParams = new List<string>(values.Count);
+                foreach (var val in values)
                 {
                     var name = GetNextParamName();
                     inParams.Add($"@{name}");
@@ -924,7 +925,7 @@ public class SelectQueryBuilder
 
     private class SelectionField
     {
-        public string Name { get; set; }
+        public string Name { get; set; } = string.Empty;
         public bool IsRaw { get; set; }
     }
 
@@ -1004,20 +1005,20 @@ public class SelectQueryExecutor
         _transaction = transaction;
     }
 
-    public async Task<MySQLReader> ExecuteQueryAsync(SelectQueryBuilder builder)
+    public async Task<MySqlReader> ExecuteQueryAsync(SelectQueryBuilder builder)
     {
         var (_, command) = builder.Build();
         command.Connection = _connection;
         if (_transaction != null) command.Transaction = _transaction;
-        return new MySQLReader(await command.ExecuteReaderAsync());
+        return new MySqlReader(await command.ExecuteReaderAsync());
     }
 
-    public MySQLReader ExecuteQuerySync(SelectQueryBuilder builder)
+    public MySqlReader ExecuteQuerySync(SelectQueryBuilder builder)
     {
         var (_, command) = builder.Build();
         command.Connection = _connection;
         if (_transaction != null) command.Transaction = _transaction;
-        return new MySQLReader(command.ExecuteReader());
+        return new MySqlReader(command.ExecuteReader());
     }
 
     public async Task<long> ExecuteCountAsync(SelectQueryBuilder builder)

@@ -465,7 +465,7 @@ public class MySQLShardConfigurationTests
     #region Thread-safety (básico)
 
     [Fact]
-    public void ConcurrentAddAndGet_DoesNotThrow()
+    public async Task ConcurrentAddAndGet_DoesNotThrow()
     {
         var manager = new MySQLShardConfiguration();
         var tasks = new List<Task>();
@@ -479,7 +479,7 @@ public class MySQLShardConfigurationTests
             }));
         }
 
-        Task.WaitAll(tasks.ToArray());
+        await Task.WhenAll(tasks);
 
         Assert.Equal(100, manager.GetAllShards().Count());
 
@@ -496,11 +496,11 @@ public class MySQLShardConfigurationTests
             }));
         }
 
-        Task.WaitAll(readTasks.ToArray());
+        await Task.WhenAll(readTasks);
     }
 
     [Fact]
-    public void ConcurrentGetDefaultShard_ReturnsSameReference()
+    public async Task ConcurrentGetDefaultShard_ReturnsSameReference()
     {
         var manager = new MySQLShardConfiguration();
         manager.AddShard(MakeConfig("Default", isDefault: true));
@@ -517,7 +517,7 @@ public class MySQLShardConfigurationTests
             }));
         }
 
-        Task.WaitAll(tasks.ToArray());
+        await Task.WhenAll(tasks);
 
         // Todas devem ser a mesma referência (cache)
         var first = results[0];

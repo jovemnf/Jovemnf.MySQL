@@ -64,7 +64,7 @@ public class Polygon
     /// <summary>
     /// Creates a Polygon from WKT (Well-Known Text) format.
     /// </summary>
-    public static Polygon FromWKT(string wkt)
+    public static Polygon? FromWKT(string? wkt)
     {
         if (string.IsNullOrWhiteSpace(wkt))
             return null;
@@ -117,7 +117,7 @@ public class Polygon
         return ToWKT();
     }
 
-    public override bool Equals(object obj)
+    public override bool Equals(object? obj)
     {
         if (obj is Polygon other)
         {

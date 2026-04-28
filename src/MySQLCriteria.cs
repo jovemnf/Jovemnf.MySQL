@@ -7,7 +7,7 @@ namespace Jovemnf.MySQL
     {
         private List<string> list = new List<string>();
 
-        public void AddColumn(string value, string alias = null)
+        public void AddColumn(string value, string? alias = null)
         {
             if (alias != null)
             {

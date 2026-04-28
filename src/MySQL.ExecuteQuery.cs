@@ -9,26 +9,26 @@ namespace Jovemnf.MySQL;
 
 public partial class MySQL
 {
-    public MySQLReader ExecuteQuerySync()
+    public MySqlReader ExecuteQuerySync()
     {
         EnsureCommandInitialized();
-        return new MySQLReader(this._cmd.ExecuteReader());
+        return new MySqlReader(this._cmd!.ExecuteReader());
     }
 
-    public MySQLReader ExecuteQuerySync(SelectQueryBuilder builder)
+    public MySqlReader ExecuteQuerySync(SelectQueryBuilder builder)
     {
         var (_, command) = builder.Build();
         AttachCommand(command);
         return ExecuteQuerySync();
     }
 
-    public async Task<MySQLReader> ExecuteQueryAsync()
+    public async Task<MySqlReader> ExecuteQueryAsync()
     {
         EnsureCommandInitialized();
-        return new MySQLReader(await _cmd.ExecuteReaderAsync());
+        return new MySqlReader(await _cmd!.ExecuteReaderAsync());
     }
 
-    public async Task<MySQLReader> ExecuteQueryAsync(SelectQueryBuilder builder)
+    public async Task<MySqlReader> ExecuteQueryAsync(SelectQueryBuilder builder)
     {
         var (_, command) = builder.Build();
         AttachCommand(command);
@@ -76,7 +76,7 @@ public partial class MySQL
     {
         var (_, command) = builder.Build();
         AttachCommand(command);
-        var result = this._cmd.ExecuteScalar();
+        var result = this._cmd!.ExecuteScalar();
         return Convert.ToInt64(result);
     }
 
@@ -84,7 +84,7 @@ public partial class MySQL
     {
         var (_, command) = builder.Build();
         AttachCommand(command);
-        var result = await _cmd.ExecuteScalarAsync();
+        var result = await _cmd!.ExecuteScalarAsync();
         return Convert.ToInt64(result);
     }
 
@@ -92,7 +92,7 @@ public partial class MySQL
     {
         var (_, command) = builder.BuildExists();
         AttachCommand(command);
-        var result = _cmd.ExecuteScalar();
+        var result = _cmd!.ExecuteScalar();
         return result != null && result != DBNull.Value && Convert.ToInt64(result) > 0;
     }
 
@@ -100,7 +100,7 @@ public partial class MySQL
     {
         var (_, command) = builder.BuildExists();
         AttachCommand(command);
-        var result = await _cmd.ExecuteScalarAsync();
+        var result = await _cmd!.ExecuteScalarAsync();
         return result != null && result != DBNull.Value && Convert.ToInt64(result) > 0;
     }
 }

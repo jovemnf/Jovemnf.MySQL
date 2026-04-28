@@ -15,7 +15,7 @@ using System.Threading;
 
 namespace Jovemnf.MySQL;
 
-public class MySQLReader(DbDataReader dr) : IDisposable, IAsyncDisposable
+public class MySqlReader(DbDataReader dr) : IDisposable, IAsyncDisposable
 {
     private DbDataReader? _dr = dr ?? throw new ArgumentNullException(nameof(dr));
     private readonly Dictionary<string, int> _ordinalCache = new(StringComparer.OrdinalIgnoreCase);
@@ -438,6 +438,7 @@ public class MySQLReader(DbDataReader dr) : IDisposable, IAsyncDisposable
         }
     }
 
+    
     private static T ParseEnum<T>(object value) where T : struct, Enum
     {
         if (value == null || value == DBNull.Value)
@@ -545,7 +546,7 @@ public class MySQLReader(DbDataReader dr) : IDisposable, IAsyncDisposable
 
         try
         {
-            int ordinal = GetOrdinal(column);
+            var ordinal = GetOrdinal(column);
             if (_dr.IsDBNull(ordinal))
                 return null;
 
@@ -557,7 +558,7 @@ public class MySQLReader(DbDataReader dr) : IDisposable, IAsyncDisposable
         }
     }
 
-    public MySQLArrayReader GetMySQLArrayReader()
+    public MySQLArrayReader? GetMySQLArrayReader()
     {
         try
         {
@@ -582,11 +583,8 @@ public class MySQLReader(DbDataReader dr) : IDisposable, IAsyncDisposable
 
         try
         {
-            int ordinal = GetOrdinal(column);
-            if (_dr.IsDBNull(ordinal))
-                return @default;
-
-            return TryParse.ToInt32(_dr.GetValue(ordinal));
+            var ordinal = GetOrdinal(column);
+            return _dr.IsDBNull(ordinal) ? @default : TryParse.ToInt32(_dr.GetValue(ordinal));
         }
         catch
         {
@@ -607,10 +605,7 @@ public class MySQLReader(DbDataReader dr) : IDisposable, IAsyncDisposable
 
         try
         {
-            if (_dr.IsDBNull(index))
-                return @default;
-
-            return TryParse.ToInt32(_dr.GetValue(index));
+            return _dr.IsDBNull(index) ? @default : TryParse.ToInt32(_dr.GetValue(index));
         }
         catch
         {
@@ -677,10 +672,7 @@ public class MySQLReader(DbDataReader dr) : IDisposable, IAsyncDisposable
 
         try
         {
-            if (_dr.IsDBNull(index))
-                return @default;
-
-            return TryParse.ToLong(_dr.GetValue(index));
+            return _dr.IsDBNull(index) ? @default : TryParse.ToLong(_dr.GetValue(index));
         }
         catch
         {
@@ -700,7 +692,7 @@ public class MySQLReader(DbDataReader dr) : IDisposable, IAsyncDisposable
 
         try
         {
-            int ordinal = GetOrdinal(column);
+            var ordinal = GetOrdinal(column);
             if (_dr.IsDBNull(ordinal))
                 return null;
 
@@ -718,23 +710,41 @@ public class MySQLReader(DbDataReader dr) : IDisposable, IAsyncDisposable
     /// <param name="column">Nome da coluna.</param>
     /// <param name="vdefault">Valor padrão se a coluna for NULL ou não encontrada.</param>
     /// <returns>Valor da coluna como string ou o valor padrão.</returns>
-    public string GetString(string column, string vdefault = null)
+    public string GetString(string column, string vdefault)
     {
         if (_dr == null || string.IsNullOrEmpty(column))
             return vdefault;
 
         try
         {
-            int ordinal = GetOrdinal(column);
-            if (this._dr.IsDBNull(ordinal))
-            {
-                return vdefault;
-            }
-            return this._dr.GetString(ordinal);
+            var ordinal = GetOrdinal(column);
+            return _dr.IsDBNull(ordinal) ? vdefault : _dr.GetString(ordinal);
         }
         catch
         {
             return vdefault;
+        }
+    }
+    
+    /// <summary>
+    /// Obtém o valor de uma coluna como string.
+    /// </summary>
+    /// <param name="column">Nome da coluna.</param>
+    /// <param name="vdefault">Valor padrão se a coluna for NULL ou não encontrada.</param>
+    /// <returns>Valor da coluna como string ou o valor padrão.</returns>
+    public string? GetString(string column)
+    {
+        if (_dr == null || string.IsNullOrEmpty(column))
+            return null;
+
+        try
+        {
+            var ordinal = GetOrdinal(column);
+            return _dr.IsDBNull(ordinal) ? null : _dr.GetString(ordinal);
+        }
+        catch
+        {
+            return null;
         }
     }
 
@@ -744,18 +754,14 @@ public class MySQLReader(DbDataReader dr) : IDisposable, IAsyncDisposable
     /// <param name="index">Índice da coluna (baseado em zero).</param>
     /// <param name="vdefault">Valor padrão se a coluna for NULL.</param>
     /// <returns>Valor da coluna como string ou o valor padrão.</returns>
-    public string GetString(int index, string vdefault = null)
+    public string? GetString(int index, string? vdefault = null)
     {
         if (_dr == null || index < 0 || index >= _dr.FieldCount)
             return vdefault;
 
         try
         {
-            if (_dr.IsDBNull(index))
-            {
-                return vdefault;
-            }
-            return _dr.GetString(index);
+            return _dr.IsDBNull(index) ? vdefault : _dr.GetString(index);
         }
         catch
         {
@@ -768,9 +774,10 @@ public class MySQLReader(DbDataReader dr) : IDisposable, IAsyncDisposable
     /// </summary>
     /// <param name="column">Nome da coluna.</param>
     /// <returns>Valor da coluna como string ou null se for NULL.</returns>
-    public string GetNullableString(string column)
+    /// <deprecated>Use GetString</deprecated>
+    public string? GetNullableString(string column)
     {
-        return GetString(column, null);
+        return GetString(column);
     }
 
     public byte[] GetByteArray(string column)
@@ -829,9 +836,9 @@ public class MySQLReader(DbDataReader dr) : IDisposable, IAsyncDisposable
     /// Obtém todas as colunas da linha atual como um dicionário.
     /// </summary>
     /// <returns>Dicionário com nome da coluna como chave e valor como valor.</returns>
-    public Dictionary<string, object> ToDictionary()
+    public Dictionary<string, object?> ToDictionary()
     {
-        var dict = new Dictionary<string, object>();
+        var dict = new Dictionary<string, object?>();
         if (_dr == null)
             return dict;
 
@@ -853,9 +860,9 @@ public class MySQLReader(DbDataReader dr) : IDisposable, IAsyncDisposable
     /// Obtém todas as linhas do resultado como uma lista de dicionários.
     /// </summary>
     /// <returns>Lista de dicionários, onde cada dicionário representa uma linha.</returns>
-    public List<Dictionary<string, object>> ToList()
+    public List<Dictionary<string, object?>> ToList()
     {
-        var list = new List<Dictionary<string, object>>();
+        var list = new List<Dictionary<string, object?>>();
         if (_dr == null)
             return list;
 
@@ -863,7 +870,7 @@ public class MySQLReader(DbDataReader dr) : IDisposable, IAsyncDisposable
         {
             while (_dr.Read())
             {
-                var dict = new Dictionary<string, object>();
+                var dict = new Dictionary<string, object?>();
                 for (var i = 0; i < _dr.FieldCount; i++)
                 {
                     var columnName = _dr.GetName(i);
@@ -882,9 +889,9 @@ public class MySQLReader(DbDataReader dr) : IDisposable, IAsyncDisposable
     /// Obtém todas as linhas do resultado como uma lista de dicionários de forma assíncrona.
     /// </summary>
     /// <returns>Task com lista de dicionários, onde cada dicionário representa uma linha.</returns>
-    public async Task<List<Dictionary<string, object>>> ToListAsync(CancellationToken cancellationToken = default)
+    public async Task<List<Dictionary<string, object?>>> ToListAsync(CancellationToken cancellationToken = default)
     {
-        var list = new List<Dictionary<string, object>>();
+        var list = new List<Dictionary<string, object?>>();
         if (_dr == null)
             return list;
 
@@ -892,7 +899,7 @@ public class MySQLReader(DbDataReader dr) : IDisposable, IAsyncDisposable
         {
             while (await _dr.ReadAsync(cancellationToken))
             {
-                var dict = new Dictionary<string, object>();
+                var dict = new Dictionary<string, object?>();
                 for (var i = 0; i < _dr.FieldCount; i++)
                 {
                     var columnName = _dr.GetName(i);
@@ -914,10 +921,10 @@ public class MySQLReader(DbDataReader dr) : IDisposable, IAsyncDisposable
     /// <returns>Uma instância de T preenchida com os dados da linha atual.</returns>
     public T ToModel<T>()
     {
-        return (T)ToModel(typeof(T));
+        return (T)ToModel(typeof(T))!;
     }
 
-    private object? ToModel(Type modelType, IReadOnlyList<string> selectedColumns = null)
+    private object? ToModel(Type modelType, IReadOnlyList<string>? selectedColumns = null)
     {
         var properties = modelType.GetProperties(BindingFlags.Public | BindingFlags.Instance);
         var columns = selectedColumns ?? GetColumnNames();
@@ -950,7 +957,7 @@ public class MySQLReader(DbDataReader dr) : IDisposable, IAsyncDisposable
                     constructorBoundProperties.Add(property.Name);
                 }
 
-                arguments[index] = ResolveArgumentValue(parameter, property, columns);
+                arguments[index] = ResolveArgumentValue(parameter, property, columns)!;
             }
 
             model = constructor.Invoke(arguments);
@@ -989,7 +996,7 @@ public class MySQLReader(DbDataReader dr) : IDisposable, IAsyncDisposable
         return model;
     }
 
-    private ConstructorInfo ResolveConstructor(Type modelType, PropertyInfo[] properties, IReadOnlyList<string> columns)
+    private ConstructorInfo? ResolveConstructor(Type modelType, PropertyInfo[] properties, IReadOnlyList<string> columns)
     {
         var constructors = modelType
             .GetConstructors(BindingFlags.Public | BindingFlags.Instance)
@@ -1018,13 +1025,13 @@ public class MySQLReader(DbDataReader dr) : IDisposable, IAsyncDisposable
         return null;
     }
 
-    private PropertyInfo FindPropertyForParameter(IEnumerable<PropertyInfo> properties, ParameterInfo parameter)
+    private PropertyInfo? FindPropertyForParameter(IEnumerable<PropertyInfo> properties, ParameterInfo parameter)
     {
         return properties.FirstOrDefault(prop =>
             string.Equals(prop.Name, parameter.Name, StringComparison.OrdinalIgnoreCase));
     }
 
-    private object? ResolveArgumentValue(ParameterInfo parameter, PropertyInfo property, IReadOnlyList<string> columns)
+    private object? ResolveArgumentValue(ParameterInfo parameter, PropertyInfo? property, IReadOnlyList<string> columns)
     {
         var columnName = FindMatchingColumnName(columns, parameter, property);
         if (columnName == null)
@@ -1055,7 +1062,7 @@ public class MySQLReader(DbDataReader dr) : IDisposable, IAsyncDisposable
         return FindMatchingColumnName(columns, ResolveTargetColumnName(property), property.Name);
     }
 
-    private string? FindMatchingColumnName(IReadOnlyList<string> columns, ParameterInfo parameter, PropertyInfo property)
+    private string? FindMatchingColumnName(IReadOnlyList<string> columns, ParameterInfo parameter, PropertyInfo? property)
     {
         return FindMatchingColumnName(
             columns,
@@ -1085,7 +1092,7 @@ public class MySQLReader(DbDataReader dr) : IDisposable, IAsyncDisposable
         return property.Name;
     }
 
-    private string ResolveTargetColumnName(ParameterInfo parameter, PropertyInfo property)
+    private string ResolveTargetColumnName(ParameterInfo parameter, PropertyInfo? property)
     {
         if (property != null)
             return ResolveTargetColumnName(property);
@@ -1101,7 +1108,7 @@ public class MySQLReader(DbDataReader dr) : IDisposable, IAsyncDisposable
         return parameter.Name ?? string.Empty;
     }
 
-    private object ConvertValue(object val, Type targetType, MemberInfo member = null, PropertyInfo property = null)
+    private object? ConvertValue(object val, Type targetType, MemberInfo? member = null, PropertyInfo? property = null)
     {
         if (property != null && MySQLValueConverterRegistry.TryConvert(property, targetType, val, out var memberConvertedValue))
             return memberConvertedValue;
@@ -1113,7 +1120,7 @@ public class MySQLReader(DbDataReader dr) : IDisposable, IAsyncDisposable
             return registeredConvertedValue;
 
         var propType = Nullable.GetUnderlyingType(targetType) ?? targetType;
-        object convertedValue = TryParse.ChangeType(val, propType);
+        object? convertedValue = TryParse.ChangeType(val, propType);
 
         if (convertedValue != null)
         {
@@ -1180,7 +1187,7 @@ public class MySQLReader(DbDataReader dr) : IDisposable, IAsyncDisposable
         return Convert.ChangeType(val, propType);
     }
 
-    private object ConvertValue(object val, Type targetType, ParameterInfo parameter, PropertyInfo property)
+    private object? ConvertValue(object val, Type targetType, ParameterInfo parameter, PropertyInfo? property)
     {
         if (property != null && MySQLValueConverterRegistry.TryConvert(property, targetType, val, out var propertyConvertedValue))
             return propertyConvertedValue;
@@ -1312,8 +1319,8 @@ public class MySQLReader(DbDataReader dr) : IDisposable, IAsyncDisposable
         {
             while (Read())
             {
-                var first = (TFirst)ToModel(typeof(TFirst), firstColumns);
-                var second = (TSecond)ToModel(typeof(TSecond), secondColumns);
+                var first = (TFirst)ToModel(typeof(TFirst), firstColumns)!;
+                var second = (TSecond)ToModel(typeof(TSecond), secondColumns)!;
                 list.Add(map(first, second));
             }
         }
@@ -1375,7 +1382,7 @@ public class MySQLReader(DbDataReader dr) : IDisposable, IAsyncDisposable
 
 public class MySQLArrayReader
 {
-    private readonly Dictionary<string, object> _list = new();
+    private readonly Dictionary<string, object?> _list = new();
 
     public MySQLArrayReader(DbDataReader? dr)
     {

@@ -24,6 +24,8 @@ public partial class MySQL
 
     public void CreateAdapter(string command)
     {
+        if (_bdConn == null)
+            throw new System.InvalidOperationException("A conexão MySQL não foi inicializada.");
         _da = new MySqlDataAdapter(command, _bdConn);
     }
 

@@ -10,13 +10,13 @@ public partial class MySQL
 {
     private MySqlConnection? _bdConn;
     //private DataSet bdDataSet;
-    private MySqlCommand cmd;
-    private MySqlCommand _cmd
+    private MySqlCommand? cmd;
+    private MySqlCommand? _cmd
     {
         get => cmd;
         set => cmd = value;
     }
-    private MySqlDataAdapter _da;
+    private MySqlDataAdapter? _da;
     private static MySQLData _data = default;
     MySqlTransaction? trans;
     private bool _initTrans = false;
@@ -137,11 +137,11 @@ public partial class MySQL
     [StructLayout(LayoutKind.Sequential)]
     private struct MySQLData
     {
-        public string HOST;
-        public string UserName;
-        public string PassWord;
-        public string Base;
-        public string Charset;
+        public string? HOST;
+        public string? UserName;
+        public string? PassWord;
+        public string? Base;
+        public string? Charset;
         public uint Port;
     }
 }

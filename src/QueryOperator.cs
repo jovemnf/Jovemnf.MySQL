@@ -42,6 +42,7 @@ public static class QueryOperatorExtensions
     public static string ToSqlString(this QueryOperator op)
     {
         var fieldInfo = op.GetType().GetField(op.ToString());
+        if (fieldInfo == null) return op.ToString();
         var attributes = (DescriptionAttribute[])fieldInfo.GetCustomAttributes(typeof(DescriptionAttribute), false);
         return attributes.Length > 0 ? attributes[0].Description : op.ToString();
     }

@@ -11,7 +11,7 @@ public partial class MySQL
         try
         {
             EnsureCommandInitialized();
-            return _cmd.ExecuteScalar();
+            return _cmd!.ExecuteScalar();
         }
         catch (Exception ex)
         {
@@ -49,7 +49,7 @@ public partial class MySQL
         try
         {
             EnsureCommandInitialized();
-            return await _cmd.ExecuteScalarAsync();
+            return await _cmd!.ExecuteScalarAsync();
         }
         catch (Exception ex)
         {

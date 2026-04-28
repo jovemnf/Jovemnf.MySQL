@@ -84,9 +84,9 @@ public static class GeometryExtensions
     /// <summary>
     /// Encontra o ponto mais próximo de um ponto de referência.
     /// </summary>
-    public static Point FindNearest(this Point reference, IEnumerable<Point> points)
+    public static Point? FindNearest(this Point reference, IEnumerable<Point> points)
     {
-        Point nearest = null;
+        Point? nearest = null;
         double minDistance = double.MaxValue;
 
         foreach (var point in points)
@@ -116,7 +116,7 @@ public static class GeometryExtensions
     /// <summary>
     /// Calcula o centro (centroide) de um polígono.
     /// </summary>
-    public static Point GetCenter(this Polygon polygon)
+    public static Point? GetCenter(this Polygon polygon)
     {
         if (polygon == null || polygon.Vertices == null || polygon.Vertices.Count == 0)
             return null;

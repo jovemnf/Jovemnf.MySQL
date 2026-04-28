@@ -19,7 +19,7 @@ public class TimeSpanTests
             }
         };
 
-        using var reader = new MySQLReader(new FakeDataReader(data));
+        using var reader = new MySqlReader(new FakeDataReader(data));
         reader.Read();
 
         var result = reader.GetTimeSpan("duracao");
@@ -38,7 +38,7 @@ public class TimeSpanTests
             }
         };
 
-        using var reader = new MySQLReader(new FakeDataReader(data));
+        using var reader = new MySqlReader(new FakeDataReader(data));
         reader.Read();
 
         var result = reader.GetTimeSpan("tempo");
@@ -57,7 +57,7 @@ public class TimeSpanTests
             }
         };
 
-        using var reader = new MySQLReader(new FakeDataReader(data));
+        using var reader = new MySqlReader(new FakeDataReader(data));
         reader.Read();
 
         var result = reader.GetTimeSpan("duracao");
@@ -77,7 +77,7 @@ public class TimeSpanTests
             }
         };
 
-        using var reader = new MySQLReader(new FakeDataReader(data));
+        using var reader = new MySqlReader(new FakeDataReader(data));
         reader.Read();
 
         var result = reader.GetTimeSpan("duracao", customDefault);
@@ -96,7 +96,7 @@ public class TimeSpanTests
             }
         };
 
-        using var reader = new MySQLReader(new FakeDataReader(data));
+        using var reader = new MySqlReader(new FakeDataReader(data));
         reader.Read();
 
         var result = reader.GetNullableTimeSpan("duracao");
@@ -116,7 +116,7 @@ public class TimeSpanTests
             }
         };
 
-        using var reader = new MySQLReader(new FakeDataReader(data));
+        using var reader = new MySqlReader(new FakeDataReader(data));
         reader.Read();
 
         var result = reader.GetNullableTimeSpan("duracao");
@@ -137,7 +137,7 @@ public class TimeSpanTests
             }
         };
 
-        using var reader = new MySQLReader(new FakeDataReader(data));
+        using var reader = new MySqlReader(new FakeDataReader(data));
         reader.Read();
 
         var model = reader.ToModel<ModeloComTimeSpan>();
@@ -161,7 +161,7 @@ public class TimeSpanTests
             }
         };
 
-        using var reader = new MySQLReader(new FakeDataReader(data));
+        using var reader = new MySqlReader(new FakeDataReader(data));
         reader.Read();
 
         var model = reader.ToModel<ModeloComTimeSpan>();

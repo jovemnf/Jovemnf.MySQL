@@ -10,7 +10,7 @@ public partial class MySQL
     public int ExecuteUpdateSync()
     {
         EnsureCommandInitialized();
-        return _cmd.ExecuteNonQuery();
+        return _cmd!.ExecuteNonQuery();
     }
 
     public int ExecuteUpdateSync(UpdateQueryBuilder builder)
@@ -24,7 +24,7 @@ public partial class MySQL
     public async Task<int> ExecuteUpdateAsync()
     {
         EnsureCommandInitialized();
-        return await _cmd.ExecuteNonQueryAsync();
+        return await _cmd!.ExecuteNonQueryAsync();
     }
 
     public async Task<int> ExecuteUpdateAsync(UpdateQueryBuilder builder)
@@ -52,7 +52,7 @@ public partial class MySQL
         AttachCommand(cmdSel, trackAsCurrent: false);
 
         await using var reader = await cmdSel.ExecuteReaderAsync();
-        await using var mysqlReader = new MySQLReader(reader);
+        await using var mysqlReader = new MySqlReader(reader);
         var list = await mysqlReader.ToModelListAsync<T>();
         return list.Count > 0 ? list[0] : default;
     }
@@ -62,7 +62,7 @@ public partial class MySQL
         var (_, command) = builder.Build();
         AttachCommand(command);
 
-        return _cmd.ExecuteNonQuery();
+        return _cmd!.ExecuteNonQuery();
     }
 
     public async Task<int> ExecuteDeleteAsync(DeleteQueryBuilder builder)
@@ -70,7 +70,7 @@ public partial class MySQL
         var (_, command) = builder.Build();
         AttachCommand(command);
 
-        return await _cmd.ExecuteNonQueryAsync();
+        return await _cmd!.ExecuteNonQueryAsync();
     }
 
     /// <summary>
@@ -82,7 +82,7 @@ public partial class MySQL
         AttachCommand(cmdSel, trackAsCurrent: false);
 
         await using var reader = await cmdSel.ExecuteReaderAsync();
-        using (var mysqlReader = new MySQLReader(reader))
+        using (var mysqlReader = new MySqlReader(reader))
         {
             var list = await mysqlReader.ToModelListAsync<T>();
 

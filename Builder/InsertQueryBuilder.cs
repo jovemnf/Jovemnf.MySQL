@@ -13,7 +13,7 @@ namespace Jovemnf.MySQL.Builder;
 
 public class InsertQueryBuilder
 {
-    private string _tableName;
+    private string? _tableName;
     private readonly Dictionary<string, object> _fields = new();
     private readonly HashSet<string> _duplicateUpdateFields = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _duplicateExcludedFields = new(StringComparer.OrdinalIgnoreCase);
@@ -95,7 +95,7 @@ public class InsertQueryBuilder
         return connection.ExecuteInsertAsync<T>(this);
     }
 
-    public Task<T> ExecuteAsync<T>(MySQL connection, CancellationToken cancellationToken) where T : new()
+    public Task<T?> ExecuteAsync<T>(MySQL connection, CancellationToken cancellationToken) where T : new()
     {
         ArgumentNullException.ThrowIfNull(connection);
         if (_tableName == null)
@@ -304,7 +304,7 @@ public class InsertQueryBuilder
 
     protected static string GetTableName<T>()
     {
-        var attr = (DbTableAttribute)Attribute.GetCustomAttribute(typeof(T), typeof(DbTableAttribute));
+        var attr = (DbTableAttribute?)Attribute.GetCustomAttribute(typeof(T), typeof(DbTableAttribute));
         return attr?.Name ?? typeof(T).Name;
     }
 
@@ -487,7 +487,7 @@ public class InsertQueryBuilder<T> : InsertQueryBuilder
 public class InsertQueryExecutor
 {
     private readonly MySqlConnection _connection;
-    private MySqlTransaction _transaction;
+    private MySqlTransaction? _transaction;
 
     public InsertQueryExecutor(MySqlConnection connection)
     {

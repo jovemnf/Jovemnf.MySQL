@@ -10,7 +10,7 @@ public partial class MySQL
     public async Task<long> ExecuteInsertAsync(bool lastId = true)
     {
         EnsureCommandInitialized();
-        await _cmd.ExecuteNonQueryAsync();
+        await _cmd!.ExecuteNonQueryAsync();
         if (lastId)
         {
             return await LastIdAsyncLong();
@@ -22,7 +22,7 @@ public partial class MySQL
     public async Task<T?> ExecuteInsertAsync<T>(bool lastId = true) where T : new()
     {
         EnsureCommandInitialized();
-        await _cmd.ExecuteNonQueryAsync();
+        await _cmd!.ExecuteNonQueryAsync();
         if (lastId)
         {
             return await LastIdAsync<T>();
@@ -36,7 +36,7 @@ public partial class MySQL
         var (_, command) = builder.Build();
         AttachCommand(command);
 
-        await this._cmd.ExecuteNonQueryAsync();
+        await this._cmd!.ExecuteNonQueryAsync();
 
         if (lastId)
             return await LastIdAsyncLong();
@@ -49,7 +49,7 @@ public partial class MySQL
         var (_, command) = builder.Build();
         AttachCommand(command);
 
-        return await this._cmd.ExecuteNonQueryAsync();
+        return await this._cmd!.ExecuteNonQueryAsync();
     }
 
     /// <summary>
@@ -65,7 +65,7 @@ public partial class MySQL
         AttachCommand(cmdSel, trackAsCurrent: false);
 
         await using var reader = await cmdSel.ExecuteReaderAsync();
-        await using var mysqlReader = new MySQLReader(reader);
+        await using var mysqlReader = new MySqlReader(reader);
         var list = await mysqlReader.ToModelListAsync<T>();
         return list.Count > 0 ? list[0] : default;
     }
@@ -100,7 +100,7 @@ public partial class MySQL
     public long ExecuteInsertSync(bool lastID = true)
     {
         EnsureCommandInitialized();
-        _cmd.ExecuteNonQuery();
+        _cmd!.ExecuteNonQuery();
         return lastID ? LastIdSync() : 0;
     }
 
@@ -109,7 +109,7 @@ public partial class MySQL
         var (_, command) = builder.Build();
         AttachCommand(command);
 
-        this._cmd.ExecuteNonQuery();
+        this._cmd!.ExecuteNonQuery();
 
         if (lastID)
             return LastIdSync();
@@ -122,13 +122,13 @@ public partial class MySQL
         var (_, command) = builder.Build();
         AttachCommand(command);
 
-        return this._cmd.ExecuteNonQuery();
+        return this._cmd!.ExecuteNonQuery();
     }
 
     private async Task<int> LastIdAsync()
     {
         EnsureCommandInitialized();
-        this._cmd.CommandText = "SELECT LAST_INSERT_ID()";
+        this._cmd!.CommandText = "SELECT LAST_INSERT_ID()";
         var result = await this._cmd.ExecuteScalarAsync();
         return result != null ? Convert.ToInt32(result) : 0;
     }
@@ -136,7 +136,7 @@ public partial class MySQL
     private async Task<T?> LastIdAsync<T>()
     {
         EnsureCommandInitialized();
-        _cmd.CommandText = "SELECT LAST_INSERT_ID()";
+        _cmd!.CommandText = "SELECT LAST_INSERT_ID()";
         var result = await this._cmd.ExecuteScalarAsync();
         return result != null ? (T)result : default(T);
     }
@@ -144,7 +144,7 @@ public partial class MySQL
     private async Task<long> LastIdAsyncLong()
     {
         EnsureCommandInitialized();
-        _cmd.CommandText = "SELECT LAST_INSERT_ID()";
+        _cmd!.CommandText = "SELECT LAST_INSERT_ID()";
         var result = await _cmd.ExecuteScalarAsync();
         return result != null ? Convert.ToInt64(result) : 0;
     }
@@ -152,7 +152,7 @@ public partial class MySQL
     private int LastIdSync()
     {
         EnsureCommandInitialized();
-        _cmd.CommandText = "SELECT LAST_INSERT_ID()";
+        _cmd!.CommandText = "SELECT LAST_INSERT_ID()";
         var result = _cmd.ExecuteScalar();
         return result != null ? Convert.ToInt32(result) : 0;
     }
