@@ -229,18 +229,16 @@ public class InsertQueryBuilder
         return this;
     }
 
-    public InsertQueryBuilder OnDuplicateKeyUpdateAllExcept(params string[] excludedFields)
+    public InsertQueryBuilder OnDuplicateKeyUpdateAllExcept(params string[]? excludedFields)
     {
         _updateAllExcept = true;
         _duplicateUpdateFields.Clear();
         _duplicateExcludedFields.Clear();
 
-        if (excludedFields != null)
+        if (excludedFields == null) return this;
+        foreach (var field in excludedFields)
         {
-            foreach (var field in excludedFields)
-            {
-                _duplicateExcludedFields.Add(ResolveField(field));
-            }
+            _duplicateExcludedFields.Add(ResolveField(field));
         }
 
         return this;

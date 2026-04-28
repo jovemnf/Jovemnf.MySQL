@@ -20,7 +20,7 @@ public class UpdateQueryBuilder
     public static UpdateQueryBuilder<T> For<T>() => new UpdateQueryBuilder<T>();
 
     protected virtual string ResolveField(string field) => field;
-    private readonly Dictionary<string, object> _fields = new();
+    private readonly Dictionary<string, object?> _fields = new();
     private readonly List<WhereCondition> _whereConditions = [];
 // ... (skip unchanged lines) ...
     private int _paramCounter = 0;
@@ -119,7 +119,7 @@ public class UpdateQueryBuilder
         }
     }
         
-    public UpdateQueryBuilder Set(string field, object value)
+    public UpdateQueryBuilder Set(string field, object? value)
     {
         field = ResolveField(field);
         // Auto-detect GEOMETRY types
@@ -130,6 +130,10 @@ public class UpdateQueryBuilder
         else if (value is Polygon polygon)
         {
             _fields[field] = new PolygonValue(polygon);
+        }
+        else if (value == null)
+        {
+            _fields[field] = DBNull.Value;
         }
         else
         {
@@ -153,7 +157,7 @@ public class UpdateQueryBuilder
     /// <param name="field">Nome do campo.</param>
     /// <param name="value">Objeto a ser serializado para JSON.</param>
     /// <returns>O builder para encadeamento.</returns>
-    public UpdateQueryBuilder SetAsJson(string field, object value)
+    public UpdateQueryBuilder SetAsJson(string field, object? value)
     {
         field = ResolveField(field);
         if (value == null)
@@ -175,7 +179,7 @@ public class UpdateQueryBuilder
     /// <param name="value">Objeto a ser serializado para JSON.</param>
     /// <param name="options">Opções de serialização JSON.</param>
     /// <returns>O builder para encadeamento.</returns>
-    public UpdateQueryBuilder SetAsJson(string field, object value, JsonSerializerOptions options)
+    public UpdateQueryBuilder SetAsJson(string field, object? value, JsonSerializerOptions options)
     {
         field = ResolveField(field);
         if (value == null)
@@ -196,7 +200,7 @@ public class UpdateQueryBuilder
     /// <param name="field">Nome do campo.</param>
     /// <param name="point">Objeto Point a ser atualizado.</param>
     /// <returns>O builder para encadeamento.</returns>
-    public UpdateQueryBuilder SetAsPoint(string field, Point point)
+    public UpdateQueryBuilder SetAsPoint(string field, Point? point)
     {
         field = ResolveField(field);
         if (point == null)
@@ -594,7 +598,7 @@ public class UpdateQueryBuilder
         return list;
     }
 
-    private static void AddParameter(MySqlCommand command, string paramName, object value)
+    private static void AddParameter(MySqlCommand command, string paramName, object? value)
     {
         var parameterName = $"@{paramName}";
         var parameter = new MySqlParameter(parameterName, value ?? DBNull.Value);

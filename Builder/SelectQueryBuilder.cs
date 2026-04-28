@@ -683,7 +683,7 @@ public class SelectQueryBuilder
         return debugSql;
     }
 
-    private static string FormatParameterValue(object value)
+    private static string FormatParameterValue(object? value)
     {
         if (value == null || value == DBNull.Value)
             return "NULL";

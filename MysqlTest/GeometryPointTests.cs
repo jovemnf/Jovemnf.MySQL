@@ -249,7 +249,7 @@ public class GeometryPointTests
         
         var data = new List<Dictionary<string, object>>
         {
-            new Dictionary<string, object>
+            new()
             {
                 { "Id", 1 },
                 { "Name", "São Paulo Office" },
@@ -277,7 +277,7 @@ public class GeometryPointTests
         // Arrange
         var data = new List<Dictionary<string, object>>
         {
-            new Dictionary<string, object>
+            new()
             {
                 { "Id", 1 },
                 { "Name", "Test Location" },
