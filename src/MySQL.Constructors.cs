@@ -7,47 +7,71 @@ namespace Jovemnf.MySQL;
 public partial class MySQL
 {
     /// <summary>
+    /// Gerenciador global de Shards. 
+    /// Permite configurar os shards no início da aplicação (Startup) e depois acessá-los em qualquer lugar.
+    /// </summary>
+    public static MySQLShardConfiguration GlobalShards { get; } = new MySQLShardConfiguration();
+
+    /// <summary>
+    /// Cria uma instância de MySQL usando uma Tag configurada no GlobalShards.
+    /// </summary>
+    /// <param name="tag">A tag do shard. Se nulo, usará o shard padrão.</param>
+    /// <returns>Uma nova instância de MySQL.</returns>
+    public static MySQL FromShard(object tag = null)
+    {
+        return new MySQL(GlobalShards, tag);
+    }
+
+    /// <summary>
+    /// Construtor usando o gerenciador de shards e uma tag específica.
+    /// </summary>
+    /// <param name="shardConfig">Gerenciador de configurações de shards.</param>
+    /// <param name="tag">Tag do shard desejado. Pode ser string, int, etc. Se nulo ou vazio, usa a configuração padrão.</param>
+    public MySQL(MySQLShardConfiguration shardConfig, object tag = null) 
+        : this(string.IsNullOrWhiteSpace(tag?.ToString()) ? shardConfig.GetDefaultShard() : shardConfig.GetShard(tag))
+    {
+    }
+
+    /// <summary>
     /// Construtor usando objeto de configuração.
     /// </summary>
     /// <param name="config">Objeto de configuração com os dados de conexão.</param>
     public MySQL(MySQLConfiguration config)
     {
-        if (config == null)
-            throw new ArgumentNullException(nameof(config));
+        ArgumentNullException.ThrowIfNull(config);
 
-        try
+        if (_bdConn is not null) return;
+
+        if (!string.IsNullOrEmpty(config.ConnectionString))
         {
-            if (_bdConn is not null) return;
-
-            if (!string.IsNullOrEmpty(config.ConnectionString))
-            {
-                this._bdConn = new MySqlConnection(config.ConnectionString);
-            }
-            else
-            {
-                MySqlConnectionStringBuilder conn_string = new()
-                {
-                    Server = config.Host,
-                    Port = config.Port,
-                    UserID = config.Username,
-                    Password = config.Password,
-                    Database = config.Database,
-                    CharacterSet = config.Charset,
-                    SslMode = MySqlSslMode.None,
-                    MaximumPoolSize = MaximumPoolSize,
-                    MinimumPoolSize = MinimumPoolSize,
-                    Pooling = Pooling,
-                    ConnectionTimeout = ConnectionTimeout,
-                    AllowUserVariables = AllowUserVariables,
-                    UseCompression = UseCompression
-                };
-
-                this._bdConn = new MySqlConnection(conn_string.ToString());
-            }
+            _bdConn = new MySqlConnection(config.ConnectionString);
         }
-        catch
+        else
         {
-            throw;
+            var pool = config.Pool;
+
+            MySqlConnectionStringBuilder connString = new()
+            {
+                Server = config.Host,
+                Port = config.Port,
+                UserID = config.Username,
+                Password = config.Password,
+                Database = config.Database,
+                CharacterSet = config.Charset,
+                SslMode = MySqlSslMode.None,
+                MaximumPoolSize = pool?.MaxPoolSize ?? MaximumPoolSize,
+                MinimumPoolSize = pool?.MinPoolSize ?? MinimumPoolSize,
+                Pooling = Pooling,
+                ConnectionTimeout = pool?.ConnectionTimeout ?? ConnectionTimeout,
+                AllowUserVariables = AllowUserVariables,
+                UseCompression = UseCompression,
+                ConnectionIdleTimeout = pool?.IdleTimeout ?? ConnectionIdleTimeout,
+                ConnectionReset = pool?.ConnectionReset ?? ConnectionReset,
+                ConnectionLifeTime = pool?.ConnectionLifeTime ?? ConnectionLifeTime,
+                Keepalive = pool?.KeepaliveInterval ?? KeepaliveInterval
+            };
+
+            _bdConn = new MySqlConnection(connString.ToString());
         }
     }
 
@@ -101,7 +125,20 @@ public partial class MySQL
 
     public MySQL()
     {
-        MySqlConnectionStringBuilder connString = new()
+        // Se existem shards configurados, usa o shard default
+        if (GlobalShards.HasShards)
+        {
+            var defaultConfig = GlobalShards.GetDefaultShard();
+
+            if (!string.IsNullOrEmpty(defaultConfig.ConnectionString))
+            {
+                _bdConn = new MySqlConnection(defaultConfig.ConnectionString);
+                return;
+            }
+        }
+
+        // Fallback: usa a configuração legada via Init()
+        MySqlConnectionStringBuilder legacyConnString = new()
         {
             Server = _data.HOST,
             Port = _data.Port,
@@ -120,6 +157,6 @@ public partial class MySQL
             Pooling = Pooling
         };
 
-        _bdConn = new MySqlConnection(connString.ToString());
+        _bdConn = new MySqlConnection(legacyConnString.ToString());
     }
 }

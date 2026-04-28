@@ -6,6 +6,7 @@ Pacote .NET Core de alto desempenho para interação simplificada com bancos de 
 
 - [Instalação](#instalacao)
 - [Configuração de conexão](#configuracao)
+- [Sharding (Múltiplas Conexões)](#sharding)
 - [Builders fluentes](#builders-fluentes)
 - [Mapeamento e ORM](#mapeamento-e-orm)
 - [Entidades tipadas (Active Record)](#entidades-tipadas)
@@ -92,6 +93,130 @@ Se preferir, você também pode instanciar a conexão com connection string dire
 ```csharp
 var mysql = new MySQL("Server=localhost;Database=monitoramento;User ID=usuario;Password=senha;");
 await mysql.OpenAsync();
+```
+
+<a id="sharding"></a>
+### Sharding / Múltiplas Conexões
+
+O pacote suporta de forma nativa o gerenciamento de múltiplos shards (bancos de dados ou instâncias diferentes) utilizando um gerenciador global. Você pode registrar várias configurações associando-as a uma **Tag** (que pode ser `string`, `int`, `enum` ou qualquer `object`) e recuperá-las dinamicamente.
+
+#### Configuração básica
+
+No `Startup.cs` ou `Program.cs`:
+
+```csharp
+using Jovemnf.MySQL;
+using Jovemnf.MySQL.Configuration;
+
+// Shard 1 (ex: usando int como tag)
+MySQL.GlobalShards.AddShard(new MySQLConfiguration
+{
+    Tag = 1,
+    Host = "db-shard-01.local",
+    Database = "cliente_abc",
+    Username = "user",
+    Password = "pwd"
+});
+
+// Shard 2 (ex: usando string como tag)
+MySQL.GlobalShards.AddShard(new MySQLConfiguration
+{
+    Tag = "Relatorios",
+    Host = "db-readonly.local",
+    Database = "analytics",
+    Username = "user",
+    Password = "pwd",
+    IsDefault = true // Será usado caso nenhuma tag seja informada
+});
+```
+
+#### Pool de conexão por Shard
+
+Cada shard pode ter sua própria configuração de pool, garantindo isolamento total entre conexões de diferentes bancos. Basta informar a propriedade `Pool`:
+
+```csharp
+// Shard de LEITURA: precisa de muitas conexões
+MySQL.GlobalShards.AddShard(new MySQLConfiguration
+{
+    Tag = "Leitura",
+    Host = "db-readonly.local",
+    Database = "analytics",
+    Username = "user",
+    Password = "pwd",
+    Pool = new PoolConfiguration
+    {
+        MaxPoolSize = 200,
+        MinPoolSize = 20,
+        ConnectionTimeout = 10
+    }
+});
+
+// Shard de ESCRITA: pool menor e mais controlado
+MySQL.GlobalShards.AddShard(new MySQLConfiguration
+{
+    Tag = "Escrita",
+    Host = "db-master.local",
+    Database = "principal",
+    Username = "user",
+    Password = "pwd",
+    IsDefault = true,
+    Pool = new PoolConfiguration
+    {
+        MaxPoolSize = 50,
+        MinPoolSize = 5,
+        ConnectionTimeout = 30,
+        IdleTimeout = 180,
+        KeepaliveInterval = 30
+    }
+});
+```
+
+Se `Pool` não for informado, os valores globais (propriedades estáticas da classe `MySQL`) são usados automaticamente, mantendo retrocompatibilidade.
+
+> **Nota:** O MySqlConnector já garante isolamento de pool por connection string. Cada shard com host, database ou credenciais diferentes **nunca** compartilha conexões com outro shard, independentemente da configuração de pool.
+
+#### Uso simplificado
+
+Para abrir a conexão desejada, basta invocar `MySQL.FromShard(...)` passando a Tag:
+
+```csharp
+// Conectando no shard de leitura (pool: max=200, min=20)
+var dbLeitura = MySQL.FromShard("Leitura");
+await dbLeitura.OpenAsync();
+
+// Conectando no shard de escrita (pool: max=50, min=5)
+var dbEscrita = MySQL.FromShard("Escrita");
+await dbEscrita.OpenAsync();
+
+// Conectando no banco default (usa o shard com IsDefault = true)
+var dbPadrao = MySQL.FromShard();
+await dbPadrao.OpenAsync();
+
+// Tags dinâmicas: int, enum ou qualquer object
+var db1 = MySQL.FromShard(1);
+var dbEnum = MySQL.FromShard(MinhaEnum.TenantA);
+```
+
+#### Gerenciamento de Shards
+
+```csharp
+// Verificar se há shards configurados
+bool temShards = MySQL.GlobalShards.HasShards;
+
+// Buscar um shard sem lançar exceção
+if (MySQL.GlobalShards.TryGetShard("Leitura", out var config))
+{
+    Console.WriteLine($"Host: {config.Host}");
+}
+
+// Listar todos os shards
+foreach (var shard in MySQL.GlobalShards.GetAllShards())
+{
+    Console.WriteLine($"Tag: {shard.Tag}, Host: {shard.Host}");
+}
+
+// Remover um shard
+MySQL.GlobalShards.RemoveShard("Leitura");
 ```
 
 <a id="builders-fluentes"></a>

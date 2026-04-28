@@ -6,7 +6,7 @@ namespace Jovemnf.MySQL;
 
 public partial class MySQL
 {
-    public object ExecuteScalarSync()
+    public object? ExecuteScalarSync()
     {
         try
         {
@@ -24,7 +24,7 @@ public partial class MySQL
     /// </summary>
     /// <param name="sql">Comando SQL a ser executado.</param>
     /// <returns>Primeira coluna da primeira linha do resultado ou null.</returns>
-    public object ExecuteScalarSync(string sql)
+    public object? ExecuteScalarSync(string sql)
     {
         if (string.IsNullOrEmpty(sql))
             throw new ArgumentException("SQL não pode ser vazio.", nameof(sql));
@@ -44,12 +44,12 @@ public partial class MySQL
         }
     }
 
-    public async Task<object> ExecuteScalarAsync()
+    public async Task<object?> ExecuteScalarAsync()
     {
         try
         {
             EnsureCommandInitialized();
-            return await this._cmd.ExecuteScalarAsync();
+            return await _cmd.ExecuteScalarAsync();
         }
         catch (Exception ex)
         {
@@ -61,7 +61,7 @@ public partial class MySQL
     /// Executa um comando e retorna um único valor de forma assíncrona (ExecuteScalar).
     /// </summary>
     /// <param name="sql">Comando SQL a ser executado.</param>    /// <returns>Task com primeira coluna da primeira linha do resultado ou null.</returns>
-    public async Task<object> ExecuteScalarAsync(string sql)
+    public async Task<object?> ExecuteScalarAsync(string sql)
     {
         if (string.IsNullOrEmpty(sql))
             throw new ArgumentException("SQL não pode ser vazio.", nameof(sql));

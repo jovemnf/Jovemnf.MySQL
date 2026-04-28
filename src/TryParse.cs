@@ -5,7 +5,7 @@ namespace Jovemnf.MySQL
 
     internal class TryParse
     {
-        public static bool ToBoolean(object value)
+        public static bool ToBoolean(object? value)
         {
             int option = ToInt32(value);
             try

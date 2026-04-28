@@ -19,7 +19,7 @@ public partial class MySQL
         return 0;
     }
 
-    public async Task<T> ExecuteInsertAsync<T>(bool lastId = true) where T : new()
+    public async Task<T?> ExecuteInsertAsync<T>(bool lastId = true) where T : new()
     {
         EnsureCommandInitialized();
         await _cmd.ExecuteNonQueryAsync();
@@ -55,7 +55,7 @@ public partial class MySQL
     /// <summary>
     /// Executa o INSERT e retorna a linha inserida mapeada para T (SELECT pela chave id).
     /// </summary>
-    public async Task<T> ExecuteInsertAsync<T>(InsertQueryBuilder builder) where T : new()
+    public async Task<T?> ExecuteInsertAsync<T>(InsertQueryBuilder builder) where T : new()
     {
         var lastId = await ExecuteInsertAsync(builder, lastId: true);
         if (lastId <= 0)
@@ -133,7 +133,7 @@ public partial class MySQL
         return result != null ? Convert.ToInt32(result) : 0;
     }
 
-    private async Task<T> LastIdAsync<T>()
+    private async Task<T?> LastIdAsync<T>()
     {
         EnsureCommandInitialized();
         _cmd.CommandText = "SELECT LAST_INSERT_ID()";
@@ -145,7 +145,7 @@ public partial class MySQL
     {
         EnsureCommandInitialized();
         _cmd.CommandText = "SELECT LAST_INSERT_ID()";
-        object result = await _cmd.ExecuteScalarAsync();
+        var result = await _cmd.ExecuteScalarAsync();
         return result != null ? Convert.ToInt64(result) : 0;
     }
 

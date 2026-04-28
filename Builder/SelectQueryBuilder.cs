@@ -672,10 +672,11 @@ public class SelectQueryBuilder
         foreach (var parameter in parameters
                      .OrderByDescending(p => p.ParameterName.Length))
         {
-            debugSql = Regex.Replace(
-                debugSql,
-                $@"{Regex.Escape(parameter.ParameterName)}(?!\w)",
-                FormatParameterValue(parameter.Value));
+            if (parameter.Value != null)
+                debugSql = Regex.Replace(
+                    debugSql,
+                    $@"{Regex.Escape(parameter.ParameterName)}(?!\w)",
+                    FormatParameterValue(parameter.Value));
         }
 
         return debugSql;
@@ -961,15 +962,15 @@ public class SelectQueryBuilder
 
     private class WhereCondition
     {
-        public string Field { get; set; }
-        public object Value { get; set; }
-        public object SecondValue { get; set; }
-        public List<object> Values { get; set; }
-        public string Operator { get; set; }
-        public string Logic { get; set; }
-        public string RawSql { get; set; }
-        public object[] RawParameters { get; set; }
-        public SelectQueryBuilder Subquery { get; set; }
+        public string? Field { get; set; }
+        public object? Value { get; set; }
+        public object? SecondValue { get; set; }
+        public List<object>? Values { get; set; }
+        public string? Operator { get; set; }
+        public string? Logic { get; set; }
+        public string? RawSql { get; set; }
+        public object[]? RawParameters { get; set; }
+        public SelectQueryBuilder? Subquery { get; set; }
     }
 
     protected virtual string ResolveField(string field) => field;
@@ -1017,7 +1018,7 @@ public class SelectQueryBuilder<T> : SelectQueryBuilder
 public class SelectQueryExecutor
 {
     private readonly MySqlConnection _connection;
-    private MySqlTransaction _transaction;
+    private readonly MySqlTransaction? _transaction;
 
     public SelectQueryExecutor(MySqlConnection connection) => _connection = connection;
     public SelectQueryExecutor(MySqlConnection connection, MySqlTransaction transaction)

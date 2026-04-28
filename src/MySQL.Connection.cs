@@ -29,10 +29,10 @@ public partial class MySQL
 
     public void Dispose()
     {
-        if (this._cmd != null)
+        if (_cmd != null)
         {
-            this._cmd.Dispose();
-            this._cmd = null;
+            _cmd.Dispose();
+            _cmd = null;
         }
 
         // Limpa transação se existir
@@ -44,36 +44,36 @@ public partial class MySQL
         }
 
         // Garante que a conexão seja fechada antes de retornar ao pool
-        if (this._bdConn != null)
+        if (_bdConn != null)
         {
-            if (this._bdConn.State == ConnectionState.Open)
+            if (_bdConn.State == ConnectionState.Open)
             {
-                this._bdConn.Close();
+                _bdConn.Close();
             }
 
-            this._bdConn.Dispose();
-            this._bdConn = null;
+            _bdConn.Dispose();
+            _bdConn = null;
         }
     }
 
     public async ValueTask DisposeAsync()
     {
-        if (this._cmd != null)
+        if (_cmd != null)
         {
-            await this._cmd.DisposeAsync();
-            this._cmd = null;
+            await _cmd.DisposeAsync();
+            _cmd = null;
         }
 
         // Garante que a conexão seja fechada antes de retornar ao pool
-        if (this._bdConn != null)
+        if (_bdConn != null)
         {
-            if (this._bdConn.State == ConnectionState.Open)
+            if (_bdConn.State == ConnectionState.Open)
             {
-                await this._bdConn.CloseAsync();
+                await _bdConn.CloseAsync();
             }
 
-            await this._bdConn.DisposeAsync();
-            this._bdConn = null;
+            await _bdConn.DisposeAsync();
+            _bdConn = null;
         }
 
         // Limpa transação se existir
@@ -117,7 +117,7 @@ public partial class MySQL
             if (_bdConn == null)
                 return false;
 
-            bool wasOpen = _bdConn.State == ConnectionState.Open;
+            var wasOpen = _bdConn.State == ConnectionState.Open;
             if (!wasOpen)
             {
                 OpenSync();
@@ -152,13 +152,13 @@ public partial class MySQL
             if (_bdConn == null)
                 return false;
 
-            bool wasOpen = _bdConn.State == ConnectionState.Open;
+            var wasOpen = _bdConn.State == ConnectionState.Open;
             if (!wasOpen)
             {
                 await OpenAsync();
             }
 
-            using (var cmd = new MySqlCommand("SELECT 1", _bdConn))
+            await using (var cmd = new MySqlCommand("SELECT 1", _bdConn))
             {
                 await cmd.ExecuteScalarAsync();
             }

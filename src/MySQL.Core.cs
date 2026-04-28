@@ -1,5 +1,6 @@
 using System;
 using System.Runtime.InteropServices;
+using JetBrains.Annotations;
 using Jovemnf.MySQL.Configuration;
 using MySqlConnector;
 
@@ -7,9 +8,9 @@ namespace Jovemnf.MySQL;
 
 public partial class MySQL
 {
-    private MySqlConnection _bdConn;
+    private MySqlConnection? _bdConn;
     //private DataSet bdDataSet;
-    private MySqlCommand cmd = null;
+    private MySqlCommand cmd;
     private MySqlCommand _cmd
     {
         get => cmd;
@@ -17,7 +18,7 @@ public partial class MySQL
     }
     private MySqlDataAdapter _da;
     private static MySQLData _data = default;
-    MySqlTransaction trans;
+    MySqlTransaction? trans;
     private bool _initTrans = false;
 
     // Configurações de Pool de Conexão - Otimizações para melhor desempenho

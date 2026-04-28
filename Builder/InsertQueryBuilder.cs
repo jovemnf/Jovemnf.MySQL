@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Linq;
 using System.Reflection;
 using System.Text.Json;
 using System.Threading;
@@ -83,7 +84,7 @@ public class InsertQueryBuilder
     /// <typeparam name="T">Tipo do modelo (deve ter construtor sem parâmetros e propriedades mapeáveis).</typeparam>
     /// <param name="connection">Conexão MySQL.</param>
     /// <returns>A entidade inserida com dados do banco (incluindo id gerado) ou default se falhar.</returns>
-    public Task<T> ExecuteAsync<T>(MySQL connection) where T : new()
+    public Task<T?> ExecuteAsync<T>(MySQL connection) where T : new()
     {
         ArgumentNullException.ThrowIfNull(connection);
         if (_tableName == null) 
@@ -134,7 +135,7 @@ public class InsertQueryBuilder
     /// <param name="field">Nome do campo.</param>
     /// <param name="value">Objeto a ser serializado para JSON.</param>
     /// <returns>O builder para encadeamento.</returns>
-    public InsertQueryBuilder ValueAsJson(string field, object value)
+    public InsertQueryBuilder ValueAsJson(string field, object? value)
     {
         field = ResolveField(field);
         if (value == null)
@@ -156,7 +157,7 @@ public class InsertQueryBuilder
     /// <param name="value">Objeto a ser serializado para JSON.</param>
     /// <param name="options">Opções de serialização JSON.</param>
     /// <returns>O builder para encadeamento.</returns>
-    public InsertQueryBuilder ValueAsJson(string field, object value, JsonSerializerOptions options)
+    public InsertQueryBuilder ValueAsJson(string field, object? value, JsonSerializerOptions options)
     {
         field = ResolveField(field);
         if (value == null)
@@ -177,7 +178,7 @@ public class InsertQueryBuilder
     /// <param name="field">Nome do campo.</param>
     /// <param name="point">Objeto Point a ser inserido.</param>
     /// <returns>O builder para encadeamento.</returns>
-    public InsertQueryBuilder ValueAsPoint(string field, Point point)
+    public InsertQueryBuilder ValueAsPoint(string field, Point? point)
     {
         field = ResolveField(field);
         if (point == null)
@@ -197,7 +198,7 @@ public class InsertQueryBuilder
     /// <param name="field">Nome do campo.</param>
     /// <param name="polygon">Objeto Polygon a ser inserido.</param>
     /// <returns>O builder para encadeamento.</returns>
-    public InsertQueryBuilder ValueAsPolygon(string field, Polygon polygon)
+    public InsertQueryBuilder ValueAsPolygon(string field, Polygon? polygon)
     {
         field = ResolveField(field);
         if (polygon == null)
@@ -317,11 +318,7 @@ public class InsertQueryBuilder
         if (_updateAllExcept)
         {
             var fields = new List<string>(_fields.Count);
-            foreach (var field in _fields.Keys)
-            {
-                if (!_duplicateExcludedFields.Contains(field))
-                    fields.Add(field);
-            }
+            fields.AddRange(_fields.Keys.Where(field => !_duplicateExcludedFields.Contains(field)));
 
             if (fields.Count == 0)
                 throw new InvalidOperationException("Nenhum campo restou para atualizar em caso de chave duplicada.");
@@ -477,10 +474,7 @@ public class InsertQueryBuilder<T> : InsertQueryBuilder
 
     protected override string ResolveField(string field)
     {
-        if (FieldMapping.TryGetValue(field, out var columnName))
-            return columnName;
-            
-        return field.ToSnakeCase();
+        return FieldMapping.TryGetValue(field, out var columnName) ? columnName : field.ToSnakeCase();
     }
 
     private sealed class PropertyColumnMapping(PropertyInfo property, string columnName)
@@ -551,8 +545,8 @@ public class InsertResult
 {
     public bool Success { get; set; }
     public long LastInsertedId { get; set; }
-    public string Sql { get; set; }
+    public string? Sql { get; set; }
     public TimeSpan ExecutionTime { get; set; }
-    public string Error { get; set; }
-    public Exception Exception { get; set; }
+    public string? Error { get; set; }
+    public Exception? Exception { get; set; }
 }

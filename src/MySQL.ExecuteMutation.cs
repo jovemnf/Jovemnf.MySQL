@@ -39,7 +39,7 @@ public partial class MySQL
     /// Executa o UPDATE e retorna a primeira linha afetada mapeada para T.
     /// Não suportado quando o builder usa All() (atualização em todas as linhas).
     /// </summary>
-    public async Task<T> ExecuteUpdateAsync<T>(UpdateQueryBuilder builder) where T : new()
+    public async Task<T?> ExecuteUpdateAsync<T>(UpdateQueryBuilder builder) where T : new()
     {
         var (_, cmdUp) = builder.Build();
         AttachCommand(cmdUp, trackAsCurrent: false);
@@ -52,7 +52,7 @@ public partial class MySQL
         AttachCommand(cmdSel, trackAsCurrent: false);
 
         await using var reader = await cmdSel.ExecuteReaderAsync();
-        using var mysqlReader = new MySQLReader(reader);
+        await using var mysqlReader = new MySQLReader(reader);
         var list = await mysqlReader.ToModelListAsync<T>();
         return list.Count > 0 ? list[0] : default;
     }
