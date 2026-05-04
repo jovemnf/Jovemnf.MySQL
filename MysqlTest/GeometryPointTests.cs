@@ -118,6 +118,7 @@ public class GeometryPointTests
         var restoredPoint = Point.FromWKB(wkb);
 
         // Assert
+        Assert.NotNull(restoredPoint);
         Assert.Equal(originalPoint.Latitude, restoredPoint.Latitude);
         Assert.Equal(originalPoint.Longitude, restoredPoint.Longitude);
         Assert.Equal(originalPoint.SRID, restoredPoint.SRID);

@@ -780,6 +780,100 @@ public class MySqlReader(DbDataReader dr) : IDisposable, IAsyncDisposable
         return GetString(column);
     }
 
+    /// <summary>
+    /// Obtém o valor de uma coluna como Guid.
+    /// </summary>
+    /// <param name="column">Nome da coluna.</param>
+    /// <returns>Valor da coluna como Guid.</returns>
+    /// <exception cref="InvalidOperationException">Quando o reader não está inicializado, a coluna é inválida ou o valor é NULL.</exception>
+    public Guid GetGuid(string column)
+    {
+        if (_dr == null || string.IsNullOrEmpty(column))
+            throw new InvalidOperationException("Reader não foi inicializado ou nome da coluna é inválido.");
+
+        try
+        {
+            var ordinal = GetOrdinal(column);
+            if (_dr.IsDBNull(ordinal))
+                throw new InvalidOperationException($"A coluna '{column}' contém um valor NULL.");
+
+            return ParseGuid(_dr.GetValue(ordinal))
+                ?? throw new InvalidOperationException($"A coluna '{column}' não pôde ser convertida para Guid.");
+        }
+        catch (Exception ex) when (ex is not InvalidOperationException)
+        {
+            throw new Exception($"Impossível obter Guid da coluna '{column}': {ex.Message}", ex);
+        }
+    }
+
+    /// <summary>
+    /// Obtém o valor de uma coluna como Guid, com valor padrão para NULL ou erro.
+    /// </summary>
+    /// <param name="column">Nome da coluna.</param>
+    /// <param name="default">Valor padrão se a coluna for NULL ou não encontrada.</param>
+    /// <returns>Valor da coluna como Guid ou o valor padrão.</returns>
+    public Guid GetGuid(string column, Guid @default)
+    {
+        if (_dr == null || string.IsNullOrEmpty(column))
+            return @default;
+
+        try
+        {
+            var ordinal = GetOrdinal(column);
+            if (_dr.IsDBNull(ordinal))
+                return @default;
+
+            return ParseGuid(_dr.GetValue(ordinal)) ?? @default;
+        }
+        catch
+        {
+            return @default;
+        }
+    }
+
+    /// <summary>
+    /// Obtém o valor de uma coluna como Guid nullable.
+    /// </summary>
+    /// <param name="column">Nome da coluna.</param>
+    /// <returns>Valor da coluna como Guid? ou null se for NULL ou não conversível.</returns>
+    public Guid? GetNullableGuid(string column)
+    {
+        if (_dr == null || string.IsNullOrEmpty(column))
+            return null;
+
+        try
+        {
+            var ordinal = GetOrdinal(column);
+            if (_dr.IsDBNull(ordinal))
+                return null;
+
+            return ParseGuid(_dr.GetValue(ordinal));
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static Guid? ParseGuid(object? value)
+    {
+        if (value == null || value == DBNull.Value)
+            return null;
+
+        switch (value)
+        {
+            case Guid guid:
+                return guid;
+            case string s when Guid.TryParse(s, out var parsed):
+                return parsed;
+            case byte[] bytes when bytes.Length == 16:
+                return new Guid(bytes);
+        }
+
+        var str = value.ToString();
+        return Guid.TryParse(str, out var fallback) ? fallback : null;
+    }
+
     public byte[] GetByteArray(string column)
     {
         byte[] cs10000;

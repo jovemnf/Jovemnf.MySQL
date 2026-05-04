@@ -22,7 +22,7 @@ public class ParsingTests
     {
         Assert.Equal(10.5m, TryParse.ToDecimal(10.5));
         Assert.Equal(10.5m, TryParse.ToDecimal("10.5"));
-        Assert.Equal(0m, TryParse.ToDecimal(null));
+        Assert.Equal(0m, TryParse.ToDecimal(null!));
         Assert.Equal(0m, TryParse.ToDecimal("invalid"));
     }
 
@@ -31,7 +31,7 @@ public class ParsingTests
     {
         Assert.Equal(10.5, TryParse.ToDouble(10.5));
         Assert.Equal(10.5, TryParse.ToDouble("10.5"));
-        Assert.Equal(0.0, TryParse.ToDouble(null));
+        Assert.Equal(0.0, TryParse.ToDouble(null!));
         Assert.Equal(0.0, TryParse.ToDouble("invalid"));
     }
 
@@ -40,7 +40,7 @@ public class ParsingTests
     {
         Assert.Equal(100L, TryParse.ToLong(100));
         Assert.Equal(100L, TryParse.ToLong("100"));
-        Assert.Equal(0L, TryParse.ToLong(null));
+        Assert.Equal(0L, TryParse.ToLong(null!));
         Assert.Equal(0L, TryParse.ToLong("invalid"));
     }
 
@@ -56,7 +56,7 @@ public class ParsingTests
     [Fact]
     public void TestToTimeSpan()
     {
-        Assert.Equal(TimeSpan.Zero, TryParse.ToTimeSpan(null));
+        Assert.Equal(TimeSpan.Zero, TryParse.ToTimeSpan(null!));
         Assert.Equal(TimeSpan.Zero, TryParse.ToTimeSpan(DBNull.Value));
         Assert.Equal(new TimeSpan(2, 30, 0), TryParse.ToTimeSpan(new TimeSpan(2, 30, 0)));
         Assert.Equal(new TimeSpan(1, 15, 30), TryParse.ToTimeSpan("01:15:30"));

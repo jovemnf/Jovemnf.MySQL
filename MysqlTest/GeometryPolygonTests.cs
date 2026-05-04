@@ -181,6 +181,7 @@ public class GeometryPolygonTests
         // Assert
         // Original has 3 vertices, but ToWKT auto-closes it to 4 points in WKT
         // FromWKT reads all 4 points, so restored polygon has 4 vertices
+        Assert.NotNull(restoredPolygon);
         Assert.Equal(3, originalPolygon.Vertices.Count);
         Assert.Equal(4, restoredPolygon.Vertices.Count);
         
@@ -287,7 +288,7 @@ public class GeometryPolygonTests
         // Arrange
         var builder = new UpdateQueryBuilder()
             .Table("zones")
-            .SetAsPolygon("area", null)
+            .SetAsPolygon("area", null!)
             .Where("id", 1);
 
         // Act

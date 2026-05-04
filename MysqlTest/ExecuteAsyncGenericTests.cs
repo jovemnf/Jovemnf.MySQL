@@ -493,11 +493,11 @@ public class ExecuteAsyncGenericTests
     {
         using var conn = CreateConnection();
 
-        Task<DummyEntity> insertTask = InsertQueryBuilder.For<DummyEntity>()
+        Task<DummyEntity?> insertTask = InsertQueryBuilder.For<DummyEntity>()
             .Value("Name", "x")
             .ExecuteAsync<DummyEntity>(conn);
 
-        Task<DummyEntity> updateTask = UpdateQueryBuilder.For<DummyEntity>()
+        Task<DummyEntity?> updateTask = UpdateQueryBuilder.For<DummyEntity>()
             .Set("Name", "y")
             .Where("Id", 1)
             .ExecuteAsync<DummyEntity>(conn);
@@ -515,8 +515,8 @@ public class ExecuteAsyncGenericTests
         Assert.NotNull(updateTask);
         Assert.NotNull(selectTask);
         Assert.NotNull(deleteTask);
-        Assert.IsType<Task<DummyEntity>>(insertTask);
-        Assert.IsType<Task<DummyEntity>>(updateTask);
+        Assert.IsType<Task<DummyEntity?>>(insertTask);
+        Assert.IsType<Task<DummyEntity?>>(updateTask);
         Assert.IsType<Task<List<DummyEntity>>>(selectTask);
         Assert.IsType<Task<List<DummyEntity>>>(deleteTask);
     }

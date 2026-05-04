@@ -162,6 +162,7 @@ public class GeometryExtensionsTests
         var nearest = reference.FindNearest(points);
 
         // Assert
+        Assert.NotNull(nearest);
         Assert.Equal(-23.552, nearest.Latitude);
         Assert.Equal(-46.634, nearest.Longitude);
     }
@@ -204,6 +205,7 @@ public class GeometryExtensionsTests
         var center = polygon.GetCenter();
 
         // Assert - Center should be at (-23.55, -46.65)
+        Assert.NotNull(center);
         Assert.True(Math.Abs(center.Latitude - (-23.55)) < 0.01);
         Assert.True(Math.Abs(center.Longitude - (-46.65)) < 0.01);
     }
@@ -318,6 +320,7 @@ public class GeometryExtensionsTests
         
         // Verify it's centered
         var boxCenter = box.GetCenter();
+        Assert.NotNull(boxCenter);
         Assert.True(Math.Abs(boxCenter.Latitude - center.Latitude) < 0.001);
         Assert.True(Math.Abs(boxCenter.Longitude - center.Longitude) < 0.001);
     }
@@ -329,7 +332,7 @@ public class GeometryExtensionsTests
         var point = new Point(-23.551, -46.633);
 
         // Act
-        var isInside = point.IsInside(null);
+        var isInside = point.IsInside(null!);
 
         // Assert
         Assert.False(isInside);
@@ -342,7 +345,7 @@ public class GeometryExtensionsTests
         Polygon? polygon = null;
 
         // Act
-        var center = polygon.GetCenter();
+        var center = polygon!.GetCenter();
 
         // Assert
         Assert.Null(center);
