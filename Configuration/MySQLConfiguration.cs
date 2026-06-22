@@ -1,3 +1,5 @@
+using MySqlConnector;
+
 namespace Jovemnf.MySQL.Configuration;
 
 /// <summary>
@@ -35,6 +37,10 @@ public class MySQLConfiguration
     /// Charset a ser usado na conexão. Padrão: utf8.
     /// </summary>
     public string Charset { get; set; } = "utf8";
+
+    public MySqlSslMode SslMode { get; set; } = MySqlSslMode.None;
+
+    public bool AllowPublicKeyRetrieval { get; set; } = true;
 
     /// <summary>
     /// String de conexão completa. Se fornecida, outras propriedades são ignoradas.
