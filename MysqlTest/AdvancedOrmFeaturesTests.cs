@@ -268,7 +268,7 @@ public class AdvancedOrmFeaturesTests
     [Fact]
     public void MySQL_OptionsConstructor_ConfiguresLogger()
     {
-        var config = new Jovemnf.MySQL.Configuration.MySQLConfiguration
+        var config = new Jovemnf.MySQL.Configuration.MySqlConfiguration
         {
             Host = "localhost",
             Database = "test",

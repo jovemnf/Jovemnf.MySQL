@@ -20,7 +20,7 @@ public partial class MySQL
 
     public MySQLOptions Options { get; private set; } = DefaultOptions;
 
-    public MySQL(MySQLConfiguration config, MySQLOptions options) : this(config)
+    public MySQL(MySqlConfiguration config, MySQLOptions options) : this(config)
     {
         Options = options ?? DefaultOptions;
     }

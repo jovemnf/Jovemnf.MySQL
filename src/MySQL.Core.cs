@@ -81,7 +81,7 @@ public partial class MySQL
     /// Inicializa as configurações padrão de conexão usando um objeto de configuração.
     /// </summary>
     /// <param name="config">Objeto de configuração com os dados de conexão.</param>
-    public static void Init(MySQLConfiguration config)
+    public static void Init(MySqlConfiguration config)
     {
         ArgumentNullException.ThrowIfNull(config);
 
@@ -93,7 +93,7 @@ public partial class MySQL
         _data.Port = config.Port;
     }
 
-    public static void Init(MySQLConfiguration config, PoolConfiguration pool)
+    public static void Init(MySqlConfiguration config, PoolConfiguration pool)
     {
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(pool);

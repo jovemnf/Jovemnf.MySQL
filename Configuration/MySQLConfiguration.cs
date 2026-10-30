@@ -6,7 +6,7 @@ namespace Jovemnf.MySQL.Configuration;
 /// Classe de configuração para conexão MySQL.
 /// Agrupa todas as propriedades necessárias para estabelecer uma conexão.
 /// </summary>
-public class MySQLConfiguration
+public class MySqlConfiguration
 {
     /// <summary>
     /// Host ou endereço IP do servidor MySQL.

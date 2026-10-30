@@ -36,7 +36,7 @@ public partial class MySQL
     /// Construtor usando objeto de configuração.
     /// </summary>
     /// <param name="config">Objeto de configuração com os dados de conexão.</param>
-    public MySQL(MySQLConfiguration config)
+    public MySQL(MySqlConfiguration config)
     {
         ArgumentNullException.ThrowIfNull(config);
 

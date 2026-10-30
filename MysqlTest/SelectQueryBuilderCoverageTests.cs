@@ -10,7 +10,7 @@ namespace MysqlTest;
 
 public class SelectQueryBuilderCoverageTests
 {
-    private static MySQL CreateConnection() => new MySQL(new MySQLConfiguration
+    private static MySQL CreateConnection() => new MySQL(new MySqlConfiguration
     {
         Host = "localhost",
         Database = "test",

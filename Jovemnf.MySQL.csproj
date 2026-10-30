@@ -16,8 +16,8 @@
     <RepositoryUrl>https://github.com/jovemnf/Jovemnf.MySQL.git</RepositoryUrl>
     <PackageProjectUrl>https://github.com/jovemnf/Jovemnf.MySQL/blob/master/README.md</PackageProjectUrl>
     <ReleaseVersion>0.0.28</ReleaseVersion>
-    <PackageVersion>1.0.18</PackageVersion>
-    <AssemblyVersion>1.0.18</AssemblyVersion>
+    <PackageVersion>1.0.19</PackageVersion>
+    <AssemblyVersion>1.0.19</AssemblyVersion>
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
@@ -33,7 +33,7 @@
     <PackageReference Include="JetBrains.Annotations" Version="2025.2.4" />
     <PackageReference Include="Jovemnf.DateTimeStamp" Version="1.0.2" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.6" />
-    <PackageReference Include="MySqlConnector" Version="2.5.0" />
+    <PackageReference Include="MySqlConnector" Version="2.6.2" />
     <PackageReference Include="System.Text.Json" Version="10.0.3" />
   </ItemGroup>
 

@@ -22,7 +22,7 @@ public class ExecuteInsertTests
     public async Task ExecuteInsertAsync_Entity_PreparesCommandCorrectly()
     {
         // Arrange
-        var config = new MySQLConfiguration() 
+        var config = new MySqlConfiguration() 
         { 
             Host = "localhost", 
             Database = "test", 
@@ -66,7 +66,7 @@ public class ExecuteInsertTests
     public async Task LastIdAsync_Generic_HandlesPrimitives()
     {
         // Arrange
-        var config = new MySQLConfiguration 
+        var config = new MySqlConfiguration 
         { 
             Host = "localhost", 
             Database = "test", 

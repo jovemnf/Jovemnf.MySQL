@@ -12,7 +12,7 @@ namespace MysqlTest;
 [Collection(MutationProtectionTestCollection.Name)]
 public class MutationBuildersCoverageTests
 {
-    private static MySQL CreateConnection() => new MySQL(new MySQLConfiguration
+    private static MySQL CreateConnection() => new MySQL(new MySqlConfiguration
     {
         Host = "localhost",
         Database = "test",

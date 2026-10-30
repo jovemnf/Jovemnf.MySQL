@@ -8,9 +8,9 @@ public class MySQLShardConfigurationTests
 {
     #region Helpers
 
-    private static MySQLConfiguration MakeConfig(object tag, bool isDefault = false, string host = "localhost")
+    private static MySqlConfiguration MakeConfig(object tag, bool isDefault = false, string host = "localhost")
     {
-        return new MySQLConfiguration
+        return new MySqlConfiguration
         {
             Tag = tag,
             Host = host,
@@ -21,9 +21,9 @@ public class MySQLShardConfigurationTests
         };
     }
 
-    private static MySQLConfiguration MakeConfigWithConnectionString(object tag, bool isDefault = false)
+    private static MySqlConfiguration MakeConfigWithConnectionString(object tag, bool isDefault = false)
     {
-        return new MySQLConfiguration
+        return new MySqlConfiguration
         {
             Tag = tag,
             ConnectionString = $"Server=shard-{tag};Database=db_{tag};User ID=user;Password=pwd;",
@@ -380,28 +380,28 @@ public class MySQLShardConfigurationTests
     [Fact]
     public void Tag_DefaultValue_IsDefault()
     {
-        var config = new MySQLConfiguration();
+        var config = new MySqlConfiguration();
         Assert.Equal("Default", config.Tag?.ToString());
     }
 
     [Fact]
     public void Tag_AcceptsString()
     {
-        var config = new MySQLConfiguration { Tag = "Master" };
+        var config = new MySqlConfiguration { Tag = "Master" };
         Assert.Equal("Master", config.Tag?.ToString());
     }
 
     [Fact]
     public void Tag_AcceptsInt()
     {
-        var config = new MySQLConfiguration { Tag = 42 };
+        var config = new MySqlConfiguration { Tag = 42 };
         Assert.Equal("42", config.Tag?.ToString());
     }
 
     [Fact]
     public void Tag_AcceptsEnum()
     {
-        var config = new MySQLConfiguration { Tag = ShardType.ReadOnly };
+        var config = new MySqlConfiguration { Tag = ShardType.ReadOnly };
         Assert.Equal("ReadOnly", config.Tag?.ToString());
     }
 
@@ -505,7 +505,7 @@ public class MySQLShardConfigurationTests
         var manager = new MySQLShardConfiguration();
         manager.AddShard(MakeConfig("Default", isDefault: true));
 
-        var results = new MySQLConfiguration[50];
+        var results = new MySqlConfiguration[50];
         var tasks = new List<Task>();
 
         for (int i = 0; i < 50; i++)

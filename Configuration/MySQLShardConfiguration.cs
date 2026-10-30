@@ -13,12 +13,12 @@ namespace Jovemnf.MySQL.Configuration;
 /// </summary>
 public class MySQLShardConfiguration
 {
-    private readonly ConcurrentDictionary<string, MySQLConfiguration> _shards = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, MySqlConfiguration> _shards = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Cache do shard default. Invalidado automaticamente ao adicionar/remover shards.
     /// </summary>
-    private volatile MySQLConfiguration? _cachedDefault;
+    private volatile MySqlConfiguration? _cachedDefault;
 
     /// <summary>
     /// Indica se existem shards configurados.
@@ -29,7 +29,7 @@ public class MySQLShardConfiguration
     /// Adiciona uma nova configuração de shard.
     /// </summary>
     /// <param name="config">A configuração do MySQL que contém a Tag preenchida.</param>
-    public void AddShard(MySQLConfiguration config)
+    public void AddShard(MySqlConfiguration config)
     {
         ArgumentNullException.ThrowIfNull(config);
         var tagStr = config.Tag?.ToString();
@@ -46,7 +46,7 @@ public class MySQLShardConfiguration
     /// </summary>
     /// <param name="tag">A tag do shard desejado. Pode ser string, int, etc.</param>
     /// <returns>A configuração correspondente à tag.</returns>
-    public MySQLConfiguration GetShard(object tag)
+    public MySqlConfiguration GetShard(object tag)
     {
         var tagStr = tag.ToString();
         if (string.IsNullOrWhiteSpace(tagStr)) throw new ArgumentNullException(nameof(tag));
@@ -65,7 +65,7 @@ public class MySQLShardConfiguration
     /// <param name="tag">A tag do shard desejado.</param>
     /// <param name="config">A configuração encontrada, ou null.</param>
     /// <returns>True se encontrou, false caso contrário.</returns>
-    public bool TryGetShard(object tag, out MySQLConfiguration? config)
+    public bool TryGetShard(object tag, out MySqlConfiguration? config)
     {
         config = null;
         var tagStr = tag.ToString();
@@ -78,7 +78,7 @@ public class MySQLShardConfiguration
     /// O resultado é cacheado e invalidado automaticamente ao adicionar novos shards.
     /// </summary>
     /// <returns>A configuração padrão.</returns>
-    public MySQLConfiguration GetDefaultShard()
+    public MySqlConfiguration GetDefaultShard()
     {
         var cached = _cachedDefault;
         if (cached != null) return cached;
@@ -129,5 +129,5 @@ public class MySQLShardConfiguration
     /// <summary>
     /// Retorna todas as configurações registradas.
     /// </summary>
-    public IEnumerable<MySQLConfiguration> GetAllShards() => _shards.Values;
+    public IEnumerable<MySqlConfiguration> GetAllShards() => _shards.Values;
 }
